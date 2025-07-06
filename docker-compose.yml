@@ -1,0 +1,65 @@
+version: '3.8'
+
+services:
+  frontend:
+    build: ./frontend
+    ports:
+      - "3000:3000"
+    environment:
+      - BLOG_SERVICE_URL=http://blog-service:3001
+      - COMMENT_SERVICE_URL=http://comment-service:3002
+      - USER_SERVICE_URL=http://user-service:3003
+      - NOTIFICATION_SERVICE_URL=http://notification-service:3004
+    depends_on:
+      - blog-service
+      - comment-service
+      - user-service
+      - notification-service
+    networks:
+      - blog-network
+
+  blog-service:
+    build: ./blog-service
+    ports:
+      - "3001:3001"
+    environment:
+      - NOTIFICATION_SERVICE_URL=http://notification-service:3004
+    depends_on:
+      - notification-service
+    networks:
+      - blog-network
+
+  comment-service:
+    build: ./comment-service
+    ports:
+      - "3002:3002"
+    environment:
+      - NOTIFICATION_SERVICE_URL=http://notification-service:3004
+      - BLOG_SERVICE_URL=http://blog-service:3001
+    depends_on:
+      - blog-service
+      - notification-service
+    networks:
+      - blog-network
+
+  user-service:
+    build: ./user-service
+    ports:
+      - "3003:3003"
+    environment:
+      - NOTIFICATION_SERVICE_URL=http://notification-service:3004
+    depends_on:
+      - notification-service
+    networks:
+      - blog-network
+
+  notification-service:
+    build: ./notification-service
+    ports:
+      - "3004:3004"
+    networks:
+      - blog-network
+
+networks:
+  blog-network:
+    driver: bridge

@@ -1,0 +1,99 @@
+apiVersion: networking.istio.io/v1beta1
+kind: Gateway
+metadata:
+  name: blog-gateway
+  namespace: blog-microservices
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+  - port:
+      number: 80
+      name: http
+      protocol: HTTP
+    hosts:
+    - "*"
+---
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: blog-virtualservice
+  namespace: blog-microservices
+spec:
+  hosts:
+  - "*"
+  gateways:
+  - blog-gateway
+  http:
+  - match:
+    - uri:
+        prefix: "/"
+    route:
+    - destination:
+        host: frontend
+        port:
+          number: 3000
+---
+# Blog Service Virtual Service
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: blog-service-vs
+  namespace: blog-microservices
+spec:
+  hosts:
+  - blog-service
+  http:
+  - route:
+    - destination:
+        host: blog-service
+        port:
+          number: 3001
+---
+# Comment Service Virtual Service
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: comment-service-vs
+  namespace: blog-microservices
+spec:
+  hosts:
+  - comment-service
+  http:
+  - route:
+    - destination:
+        host: comment-service
+        port:
+          number: 3002
+---
+# User Service Virtual Service
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: user-service-vs
+  namespace: blog-microservices
+spec:
+  hosts:
+  - user-service
+  http:
+  - route:
+    - destination:
+        host: user-service
+        port:
+          number: 3003
+---
+# Notification Service Virtual Service
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: notification-service-vs
+  namespace: blog-microservices
+spec:
+  hosts:
+  - notification-service
+  http:
+  - route:
+    - destination:
+        host: notification-service
+        port:
+          number: 3004
