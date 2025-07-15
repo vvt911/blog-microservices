@@ -6,8 +6,6 @@ Hệ thống monitoring cho Blog Microservices bao gồm:
 
 - **Prometheus**: Thu thập metrics từ Istio và các microservices
 - **Grafana**: Visualization và dashboards
-- **Kiali**: Service mesh observability
-- **Jaeger**: Distributed tracing
 
 ## Cài đặt và Khởi chạy
 
@@ -19,7 +17,7 @@ Hệ thống monitoring cho Blog Microservices bao gồm:
 Script này sẽ **tự động**:
 - Build Docker images cho tất cả microservices
 - Deploy Kubernetes resources
-- Cài đặt Istio monitoring stack (Prometheus, Grafana, Kiali, Jaeger)
+- Cài đặt Istio monitoring stack (Prometheus, Grafana)
 - Cấu hình custom Grafana dashboard
 - Thiết lập ServiceMonitors cho Prometheus
 - **Tự động tìm và sử dụng ports có sẵn**
@@ -32,8 +30,6 @@ Bạn sẽ thấy output như:
 📊 Starting All Monitoring Dashboards:
    ✅ Grafana: http://localhost:3000 (admin/admin) - PID: 12345
    ✅ Prometheus: http://localhost:9090 - PID: 12346
-   ✅ Kiali: http://localhost:20001 - PID: 12347
-   ✅ Jaeger: http://localhost:16686 - PID: 12348
    ✅ Frontend App: http://localhost:8080 - PID: 12349
 
 🚀 Blog Microservices with Istio fully deployed!
@@ -48,8 +44,6 @@ Sau khi chạy `start-monitoring.sh`:
 | Frontend App | http://localhost:8080 | - |
 | Grafana | http://localhost:3000 | admin/admin |
 | Prometheus | http://localhost:9090 | - |
-| Kiali | http://localhost:20001 | - |
-| Jaeger | http://localhost:16686 | - |
 
 ## Grafana Dashboards
 
@@ -103,13 +97,13 @@ sum(rate(istio_requests_total[1m])) by (destination_service_name)
 ```
 
 ### 3. Service Dependencies
-Kiali cung cấp service graph visualization:
+Sử dụng Grafana để visualize service dependencies:
 - Traffic flow giữa services
 - Request success/failure rates
 - Response times
 
 ### 4. Distributed Tracing
-Jaeger tracking:
+Sử dụng Istio telemetry để tracking:
 - End-to-end request flows
 - Service dependencies
 - Performance bottlenecks

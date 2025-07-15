@@ -107,6 +107,16 @@ print_success "Istio đã được cài đặt"
 # Cài đặt Istio addons để monitoring
 print_status "Đang cài đặt Istio monitoring addons..."
 
+# Dọn dẹp các components cũ nếu có
+print_status "Dọn dẹp Kiali và Jaeger cũ (nếu có)..."
+kubectl delete deployment kiali -n istio-system 2>/dev/null || true
+kubectl delete service kiali -n istio-system 2>/dev/null || true
+kubectl delete deployment jaeger -n istio-system 2>/dev/null || true
+kubectl delete service jaeger -n istio-system 2>/dev/null || true
+kubectl delete service jaeger-collector -n istio-system 2>/dev/null || true
+kubectl delete service tracing -n istio-system 2>/dev/null || true
+kubectl delete service zipkin -n istio-system 2>/dev/null || true
+
 # Hàm để cài đặt component một cách an toàn
 install_component() {
     local component=$1
@@ -135,8 +145,6 @@ install_component() {
 # Cài đặt các components
 install_component "prometheus" "https://raw.githubusercontent.com/istio/istio/release-1.20/samples/addons/prometheus.yaml"
 install_component "grafana" "https://raw.githubusercontent.com/istio/istio/release-1.20/samples/addons/grafana.yaml"
-install_component "kiali" "https://raw.githubusercontent.com/istio/istio/release-1.20/samples/addons/kiali.yaml"
-install_component "jaeger" "https://raw.githubusercontent.com/istio/istio/release-1.20/samples/addons/jaeger.yaml"
 
 print_success "Monitoring stack đã được cài đặt thành công"
 
@@ -221,8 +229,6 @@ print_status "📊 Đang khởi động Monitoring Dashboards:"
 monitoring_services=(
     "grafana:3000:istio-system"
     "prometheus:9090:istio-system"
-    "kiali:20001:istio-system"
-    "jaeger:16686:istio-system"
 )
 
 app_services=(

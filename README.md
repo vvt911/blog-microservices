@@ -146,22 +146,16 @@ GET    /unread-count         # Đếm số chưa đọc
 
 ## 🔍 Monitoring với Istio
 
-### Kiali Dashboard
-```bash
-kubectl port-forward svc/kiali 20001:20001 -n istio-system
-# Truy cập: http://localhost:20001
-```
-
 ### Grafana
 ```bash
 kubectl port-forward svc/grafana 3000:3000 -n istio-system
 # Truy cập: http://localhost:3000
 ```
 
-### Jaeger
+### Prometheus
 ```bash
-kubectl port-forward svc/jaeger 16686:16686 -n istio-system
-# Truy cập: http://localhost:16686
+kubectl port-forward svc/prometheus 9090:9090 -n istio-system
+# Truy cập: http://localhost:9090
 ```
 
 ## 🎯 Tính năng Istio Demo
@@ -178,7 +172,7 @@ kubectl port-forward svc/jaeger 16686:16686 -n istio-system
 
 ### 3. Observability
 - **Metrics:** Prometheus metrics tự động
-- **Tracing:** Distributed tracing với Jaeger
+- **Tracing:** Distributed tracing với Istio telemetry
 - **Logging:** Centralized logging
 
 ## 📁 Cấu trúc thư mục
