@@ -44,9 +44,9 @@ find_available_port() {
     
     while ! check_port $port; do
         port=$((port + 1))
-        if [ $port -gt $((base_port + 10)) ]; then
-            echo "0"  # Không tìm thấy port có sẵn trong khoảng
-            return
+        if [ $port -gt $((base_port + 50)) ]; then
+            echo "0"  # Không tìm thấy port có sẵn
+            return 1
         fi
     done
     echo $port
@@ -174,15 +174,13 @@ kubectl apply -f grafana-dashboard.yaml
 # Cấu hình monitoring
 print_status "Đang cấu hình Prometheus monitoring..."
 
-# Cấu hình Prometheus scraping cho microservices sử dụng Istio annotations
+# Cấu hình Prometheus scraping cho microservices
 print_status "Đang thêm Prometheus scraping annotations cho services..."
-kubectl patch service frontend -n blog-microservices -p '{"metadata":{"annotations":{"prometheus.io/scrape":"true","prometheus.io/port":"3000","prometheus.io/path":"/metrics"}}}' 2>/dev/null || true
-kubectl patch service blog-service -n blog-microservices -p '{"metadata":{"annotations":{"prometheus.io/scrape":"true","prometheus.io/port":"3001","prometheus.io/path":"/metrics"}}}' 2>/dev/null || true
-kubectl patch service comment-service -n blog-microservices -p '{"metadata":{"annotations":{"prometheus.io/scrape":"true","prometheus.io/port":"3002","prometheus.io/path":"/metrics"}}}' 2>/dev/null || true
-kubectl patch service user-service -n blog-microservices -p '{"metadata":{"annotations":{"prometheus.io/scrape":"true","prometheus.io/port":"3003","prometheus.io/path":"/metrics"}}}' 2>/dev/null || true
-kubectl patch service notification-service -n blog-microservices -p '{"metadata":{"annotations":{"prometheus.io/scrape":"true","prometheus.io/port":"3004","prometheus.io/path":"/metrics"}}}' 2>/dev/null || true
+for service in frontend blog-service comment-service user-service notification-service; do
+    kubectl patch service $service -n blog-microservices -p '{"metadata":{"annotations":{"prometheus.io/scrape":"true","prometheus.io/port":"3000","prometheus.io/path":"/metrics"}}}' 2>/dev/null || true
+done
 
-# Cấu hình Istio telemetry
+# Cấu hình Istio telemetry cơ bản
 kubectl apply -f - <<EOF > /dev/null 2>&1 || print_warning "Cấu hình Telemetry có thể đã thất bại"
 apiVersion: security.istio.io/v1beta1
 kind: PeerAuthentication
@@ -192,28 +190,6 @@ metadata:
 spec:
   mtls:
     mode: PERMISSIVE
----
-apiVersion: telemetry.istio.io/v1alpha1
-kind: Telemetry
-metadata:
-  name: default-metrics
-  namespace: blog-microservices
-spec:
-  metrics:
-  - providers:
-    - name: prometheus
-  - overrides:
-    - match:
-        metric: ALL_METRICS
-      tagOverrides:
-        destination_service_name:
-          value: "%{destination_service_name | 'unknown'}"
-        destination_service_namespace:
-          value: "%{destination_service_namespace | 'unknown'}"
-        source_app:
-          value: "%{source_app | 'unknown'}"
-        destination_app:
-          value: "%{destination_app | 'unknown'}"
 EOF
 
 print_success "Cấu hình monitoring đã hoàn tất"
@@ -229,97 +205,61 @@ print_success "Tất cả deployments đã sẵn sàng"
 print_success "🎉 Triển khai hoàn tất thành công!"
 echo ""
 
-# Hàm kiểm tra port có sẵn không
-check_port() {
-    if lsof -Pi :$1 -sTCP:LISTEN -t >/dev/null 2>&1; then
-        return 1  # Port đang được sử dụng
-    fi
-    return 0  # Port có sẵn
-}
-
-# Hàm tìm port có sẵn
-find_available_port() {
-    local base_port=$1
-    local port=$base_port
-    
-    while ! check_port $port; do
-        port=$((port + 1))
-        if [ $port -gt $((base_port + 100)) ]; then
-            echo "0"  # Không tìm thấy port có sẵn
-            return 1
-        fi
-    done
-    echo $port
-}
-
 # Hàm dừng các port-forwards hiện tại
 stop_existing_port_forwards() {
     print_status "Đang dừng các port-forwards hiện tại..."
-    
-    # Kill các process kubectl port-forward
-    local pids=$(pgrep -f "kubectl port-forward" 2>/dev/null || echo "")
-    if [ -n "$pids" ]; then
-        echo "$pids" | while read pid; do
-            kill $pid 2>/dev/null && print_status "Đã dừng port-forward process $pid" || true
-        done
-        sleep 2
-    fi
+    pkill -f "kubectl port-forward" 2>/dev/null || true
+    sleep 2
 }
 
 # Dừng các port-forwards hiện tại trước
 stop_existing_port_forwards
 
-print_status "📊 Đang khởi động tất cả Monitoring Dashboards:"
+print_status "📊 Đang khởi động Monitoring Dashboards:"
 
-# Khởi động Grafana
-GRAFANA_PORT=$(find_available_port 3000)
-if [ "$GRAFANA_PORT" != "0" ]; then
-    kubectl port-forward svc/grafana $GRAFANA_PORT:3000 -n istio-system > /dev/null 2>&1 &
-    GRAFANA_PID=$!
-    echo "   ✅ Grafana: http://localhost:$GRAFANA_PORT (admin/admin) - PID: $GRAFANA_PID"
-else
-    echo "   ❌ Grafana: Không tìm thấy port có sẵn"
-fi
+# Khởi động các monitoring tools
+monitoring_services=(
+    "grafana:3000:istio-system"
+    "prometheus:9090:istio-system"
+    "kiali:20001:istio-system"
+    "jaeger:16686:istio-system"
+)
 
-# Khởi động Prometheus
-PROMETHEUS_PORT=$(find_available_port 9090)
-if [ "$PROMETHEUS_PORT" != "0" ]; then
-    kubectl port-forward svc/prometheus $PROMETHEUS_PORT:9090 -n istio-system > /dev/null 2>&1 &
-    PROMETHEUS_PID=$!
-    echo "   ✅ Prometheus: http://localhost:$PROMETHEUS_PORT - PID: $PROMETHEUS_PID"
-else
-    echo "   ❌ Prometheus: Không tìm thấy port có sẵn"
-fi
+app_services=(
+    "frontend:3000:blog-microservices"
+)
 
-# Khởi động Kiali
-KIALI_PORT=$(find_available_port 20001)
-if [ "$KIALI_PORT" != "0" ]; then
-    kubectl port-forward svc/kiali $KIALI_PORT:20001 -n istio-system > /dev/null 2>&1 &
-    KIALI_PID=$!
-    echo "   ✅ Kiali: http://localhost:$KIALI_PORT - PID: $KIALI_PID"
-else
-    echo "   ❌ Kiali: Không tìm thấy port có sẵn"
-fi
+for service_info in "${monitoring_services[@]}"; do
+    IFS=':' read -r service_name service_port namespace <<< "$service_info"
+    port=$(find_available_port $service_port)
+    if [ "$port" != "0" ]; then
+        kubectl port-forward svc/$service_name $port:$service_port -n $namespace > /dev/null 2>&1 &
+        pid=$!
+        if [ "$service_name" == "grafana" ]; then
+            echo "   ✅ Grafana: http://localhost:$port (admin/admin) - PID: $pid"
+        else
+            service_display=$(echo "$service_name" | sed 's/^./\U&/')
+            echo "   ✅ $service_display: http://localhost:$port - PID: $pid"
+        fi
+    else
+        service_display=$(echo "$service_name" | sed 's/^./\U&/')
+        echo "   ❌ $service_display: Không tìm thấy port có sẵn"
+    fi
+done
 
-# Khởi động Jaeger
-JAEGER_PORT=$(find_available_port 16686)
-if [ "$JAEGER_PORT" != "0" ]; then
-    kubectl port-forward svc/jaeger $JAEGER_PORT:16686 -n istio-system > /dev/null 2>&1 &
-    JAEGER_PID=$!
-    echo "   ✅ Jaeger: http://localhost:$JAEGER_PORT - PID: $JAEGER_PID"
-else
-    echo "   ❌ Jaeger: Không tìm thấy port có sẵn"
-fi
-
-# Khởi động Frontend
-FRONTEND_PORT=$(find_available_port 8080)
-if [ "$FRONTEND_PORT" != "0" ]; then
-    kubectl port-forward svc/frontend $FRONTEND_PORT:3000 -n blog-microservices > /dev/null 2>&1 &
-    FRONTEND_PID=$!
-    echo "   ✅ Frontend App: http://localhost:$FRONTEND_PORT - PID: $FRONTEND_PID"
-else
-    echo "   ❌ Frontend: Không tìm thấy port có sẵn"
-fi
+for service_info in "${app_services[@]}"; do
+    IFS=':' read -r service_name service_port namespace <<< "$service_info"
+    port=$(find_available_port 8080)
+    if [ "$port" != "0" ]; then
+        kubectl port-forward svc/$service_name $port:$service_port -n $namespace > /dev/null 2>&1 &
+        pid=$!
+        echo "   ✅ Frontend App: http://localhost:$port - PID: $pid"
+        FRONTEND_PORT=$port
+    else
+        echo "   ❌ Frontend: Không tìm thấy port có sẵn"
+        FRONTEND_PORT="0"
+    fi
+done
 
 echo ""
 print_success "🚀 Blog Microservices với Istio đã triển khai hoàn toàn!"
@@ -328,25 +268,13 @@ echo ""
 print_status "🎯 Hành động nhanh:"
 if [ "$FRONTEND_PORT" != "0" ]; then
     echo "   📱 Truy cập ứng dụng: http://localhost:$FRONTEND_PORT"
-    echo "   🔄 Tạo Test Traffic: while true; do curl http://localhost:$FRONTEND_PORT 2>/dev/null; sleep 1; done"
 fi
 echo "   🛑 Dừng tất cả Port-forwards: pkill -f 'kubectl port-forward'"
-echo "   👀 Xem Port-forwards đang chạy: pgrep -f 'kubectl port-forward'"
 
 echo ""
-print_status "🔧 Lệnh Kubernetes:"
+print_status "🔧 Lệnh Kubernetes hữu ích:"
 echo "   kubectl get pods -n blog-microservices"
 echo "   kubectl get svc -n blog-microservices"
-echo "   kubectl get gateway -n blog-microservices"
-echo "   kubectl get virtualservice -n blog-microservices"
-
-echo ""
-print_status "📊 Tính năng Monitoring:"
-echo "   - Metrics và dashboards theo thời gian thực"
-echo "   - Distributed tracing qua các microservices"
-echo "   - Trực quan hóa topology service mesh"
-echo "   - Quản lý traffic và routing"
-echo "   - Thu thập metrics tự động thông qua Istio sidecars"
 
 # Trở về thư mục scripts
 cd "${PROJECT_ROOT}/scripts"
