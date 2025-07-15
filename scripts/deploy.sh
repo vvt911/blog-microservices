@@ -1,161 +1,112 @@
 #!/bin/bash
 
-# Build và Deploy Blog Microservices với Istio
+# ==============================================
+# 🚀 BUILD & DEPLOY BLOG MICROSERVICES - ISTIO
+# ==============================================
 set -e
 
 echo "🚀 Đang bắt đầu triển khai Blog Microservices với Istio..."
+echo ""
 
 # Màu sắc cho output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
-NC='\033[0m' # Không màu
+NC='\033[0m'
 
-# Hàm để in output có màu
-print_status() {
-    echo -e "${BLUE}[INFO]${NC} $1"
-}
+# Hàm in output có màu
+print_status() { echo -e "${BLUE}[INFO]${NC} $1"; }
+print_success() { echo -e "${GREEN}[SUCCESS]${NC} $1"; }
+print_warning() { echo -e "${YELLOW}[WARNING]${NC} $1"; }
+print_error() { echo -e "${RED}[ERROR]${NC} $1"; }
 
-print_success() {
-    echo -e "${GREEN}[SUCCESS]${NC} $1"
-}
+# ==============================================
+# 🔧 CÁC HÀM TIỆN ÍCH
+# ==============================================
 
-print_warning() {
-    echo -e "${YELLOW}[WARNING]${NC} $1"
-}
-
-print_error() {
-    echo -e "${RED}[ERROR]${NC} $1"
-}
-
-# Hàm kiểm tra port có sẵn không
+# Kiểm tra port có sẵn
 check_port() {
-    if lsof -Pi :$1 -sTCP:LISTEN -t >/dev/null 2>&1; then
-        return 1  # Port đang được sử dụng
-    fi
-    return 0  # Port có sẵn
+    lsof -Pi :$1 -sTCP:LISTEN -t >/dev/null 2>&1 && return 1 || return 0
 }
 
-# Hàm tìm port có sẵn
+# Tìm port có sẵn
 find_available_port() {
-    local base_port=$1
-    local port=$base_port
-    
+    local port=$1
     while ! check_port $port; do
         port=$((port + 1))
-        if [ $port -gt $((base_port + 50)) ]; then
-            echo "0"  # Không tìm thấy port có sẵn
-            return 1
-        fi
+        [ $port -gt $(($1 + 50)) ] && echo "0" && return 1
     done
     echo $port
 }
 
-# Kiểm tra xem minikube có đang chạy không
-print_status "Đang kiểm tra trạng thái Minikube..."
+# ==============================================
+# ✅ STEP 1: KIỂM TRA MINIKUBE
+# ==============================================
+
+print_status "Bước 1: Kiểm tra Minikube..."
 if ! minikube status > /dev/null 2>&1; then
-    print_error "Minikube không chạy. Vui lòng khởi động minikube trước:"
-    echo "minikube start"
+    print_error "Minikube không chạy. Vui lòng khởi động: minikube start"
     exit 1
 fi
 print_success "Minikube đang chạy"
-
-# Chuyển sang môi trường docker của minikube
-print_status "Đang chuyển sang môi trường Docker của Minikube..."
 eval $(minikube -p minikube docker-env)
+echo ""
 
-# Build Docker images
-print_status "Đang build Docker images..."
+# ==============================================
+# 🐳 BƯỚC 2: BUILD DOCKER IMAGES
+# ==============================================
 
-# Lấy thư mục gốc của project
+print_status "Bước 2: Đang build Docker images..."
 PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-cd "${PROJECT_ROOT}/frontend"
-print_status "Đang build frontend image..."
-docker build -t blog-frontend:latest .
+# Build tất cả services
+services=("frontend" "blog-service" "comment-service" "user-service" "notification-service")
+for service in "${services[@]}"; do
+    cd "${PROJECT_ROOT}/${service}"
+    print_status "Đang build ${service}..."
+    docker build -t ${service}:latest . -q
+done
 
-cd "${PROJECT_ROOT}/blog-service"
-print_status "Đang build blog-service image..."
-docker build -t blog-service:latest .
+print_success "Tất cả Docker images đã build xong"
+echo ""
 
-cd "${PROJECT_ROOT}/comment-service"
-print_status "Đang build comment-service image..."
-docker build -t comment-service:latest .
+# ==============================================
+# 🕸️ BƯỚC 3: KIỂM TRA ISTIO
+# ==============================================
 
-cd "${PROJECT_ROOT}/user-service"
-print_status "Đang build user-service image..."
-docker build -t user-service:latest .
-
-cd "${PROJECT_ROOT}/notification-service"
-print_status "Đang build notification-service image..."
-docker build -t notification-service:latest .
-
-print_success "Tất cả Docker images đã được build thành công"
-
-# Kiểm tra xem Istio đã được cài đặt chưa
-print_status "Đang kiểm tra cài đặt Istio..."
+print_status "Bước 3: Kiểm tra Istio..."
 if ! kubectl get namespace istio-system > /dev/null 2>&1; then
     print_error "Istio chưa được cài đặt. Vui lòng cài đặt Istio trước:"
-    echo "curl -L https://istio.io/downloadIstio | sh -"
-    echo "export PATH=\$PWD/istio-*/bin:\$PATH"
-    echo "istioctl install --set values.defaultRevision=default"
+    echo "  curl -L https://istio.io/downloadIstio | sh -"
+    echo "  export PATH=\$PWD/istio-*/bin:\$PATH"
+    echo "  istioctl install --set values.defaultRevision=default"
     exit 1
 fi
-print_success "Istio đã được cài đặt"
+print_success "Istio đã sẵn sàng"
+echo ""
 
-# Cài đặt Istio addons để monitoring
-print_status "Đang cài đặt Istio monitoring addons..."
+# ==============================================
+# 📊 BƯỚC 4: THIẾT LẬP MONITORING (PROMETHEUS + GRAFANA)
+# ==============================================
 
-# Dọn dẹp các components cũ nếu có
-print_status "Dọn dẹp Kiali và Jaeger cũ (nếu có)..."
-kubectl delete deployment kiali -n istio-system 2>/dev/null || true
-kubectl delete service kiali -n istio-system 2>/dev/null || true
-kubectl delete deployment jaeger -n istio-system 2>/dev/null || true
-kubectl delete service jaeger -n istio-system 2>/dev/null || true
-kubectl delete service jaeger-collector -n istio-system 2>/dev/null || true
-kubectl delete service tracing -n istio-system 2>/dev/null || true
-kubectl delete service zipkin -n istio-system 2>/dev/null || true
+print_status "Bước 4: Thiết lập Monitoring (Prometheus + Grafana)..."
+print_status "Cài đặt Prometheus từ Istio addon..."
+kubectl apply -f https://raw.githubusercontent.com/istio/istio/release-1.20/samples/addons/prometheus.yaml >/dev/null 2>&1 || true
+print_status "Cài đặt Grafana từ Istio addon..."
+kubectl apply -f https://raw.githubusercontent.com/istio/istio/release-1.20/samples/addons/grafana.yaml >/dev/null 2>&1 || true
+print_success "Monitoring stack đã sẵn sàng"
+echo ""
 
-# Hàm để cài đặt component một cách an toàn
-install_component() {
-    local component=$1
-    local url=$2
-    
-    print_status "Đang cài đặt $component..."
-    
-    if kubectl get deployment $component -n istio-system > /dev/null 2>&1; then
-        print_warning "$component đã được cài đặt rồi, bỏ qua..."
-        return 0
-    fi
-    
-    # Download và apply
-    if curl -s $url | kubectl apply -f -; then
-        print_success "$component đã được cài đặt thành công"
-        # Đợi deployment có sẵn
-        kubectl wait --for=condition=available --timeout=180s deployment/$component -n istio-system 2>/dev/null || {
-            print_warning "$component deployment có thể cần nhiều thời gian hơn để sẵn sàng"
-        }
-    else
-        print_error "Lỗi khi cài đặt $component"
-        return 1
-    fi
-}
+# ==============================================
+# 🚀 BƯỚC 5: TRIỂN KHAI KUBERNETES RESOURCES
+# ==============================================
 
-# Cài đặt các components
-install_component "prometheus" "https://raw.githubusercontent.com/istio/istio/release-1.20/samples/addons/prometheus.yaml"
-install_component "grafana" "https://raw.githubusercontent.com/istio/istio/release-1.20/samples/addons/grafana.yaml"
-
-print_success "Monitoring stack đã được cài đặt thành công"
-
-# Triển khai Kubernetes resources
-print_status "Đang triển khai Kubernetes resources..."
-
+print_status "Bước 5: Triển khai Kubernetes resources..."
 cd "${PROJECT_ROOT}/k8s"
 
-# Tạo namespace và bật Istio injection
-print_status "Đang tạo namespace..."
-kubectl apply -f - <<EOF
+# Tạo namespace với Istio injection
+kubectl apply -f - <<EOF >/dev/null
 apiVersion: v1
 kind: Namespace
 metadata:
@@ -164,32 +115,26 @@ metadata:
     istio-injection: enabled
 EOF
 
-# Triển khai services
-print_status "Đang triển khai services..."
-kubectl apply -f services.yaml
+# Triển khai resources
+kubectl apply -f services.yaml >/dev/null
+kubectl apply -f istio-gateway.yaml >/dev/null
+kubectl apply -f destination-rules.yaml >/dev/null
 
-# Triển khai Istio configurations
-print_status "Đang triển khai Istio Gateway..."
-kubectl apply -f istio-gateway.yaml
+print_success "Kubernetes resources đã được triển khai"
+echo ""
 
-print_status "Đang triển khai Destination Rules..."
-kubectl apply -f destination-rules.yaml
+# ==============================================
+# ⚙️ BƯỚC 6: CẤU HÌNH MONITORING
+# ==============================================
 
-# Triển khai Grafana dashboard
-print_status "Đang triển khai custom Grafana dashboard..."
-kubectl apply -f grafana-dashboard.yaml
+print_status "Bước 6: Cấu hình monitoring..."
 
-# Cấu hình monitoring
-print_status "Đang cấu hình Prometheus monitoring..."
+# Istio sẽ tự động inject sidecar và thu thập metrics
+print_status "Istio sẽ tự động thu thập metrics từ service mesh"
 
-# Cấu hình Prometheus scraping cho microservices
-print_status "Đang thêm Prometheus scraping annotations cho services..."
-for service in frontend blog-service comment-service user-service notification-service; do
-    kubectl patch service $service -n blog-microservices -p '{"metadata":{"annotations":{"prometheus.io/scrape":"true","prometheus.io/port":"3000","prometheus.io/path":"/metrics"}}}' 2>/dev/null || true
-done
-
-# Cấu hình Istio telemetry cơ bản
-kubectl apply -f - <<EOF > /dev/null 2>&1 || print_warning "Cấu hình Telemetry có thể đã thất bại"
+# Cấu hình mTLS cho Istio
+print_status "Cấu hình Istio mTLS..."
+kubectl apply -f - <<EOF >/dev/null 2>&1 || true
 apiVersion: security.istio.io/v1beta1
 kind: PeerAuthentication
 metadata:
@@ -200,87 +145,96 @@ spec:
     mode: PERMISSIVE
 EOF
 
-print_success "Cấu hình monitoring đã hoàn tất"
-
-print_success "Tất cả resources đã được triển khai thành công"
-
-# Đợi các deployments sẵn sàng
-print_status "Đang đợi các deployments sẵn sàng..."
-kubectl wait --for=condition=available --timeout=300s deployment --all -n blog-microservices
-
-print_success "Tất cả deployments đã sẵn sàng"
-
-print_success "🎉 Triển khai hoàn tất thành công!"
+print_success "Monitoring đã được cấu hình"
 echo ""
 
-# Hàm dừng các port-forwards hiện tại
-stop_existing_port_forwards() {
-    print_status "Đang dừng các port-forwards hiện tại..."
-    pkill -f "kubectl port-forward" 2>/dev/null || true
-    sleep 2
+# ==============================================
+# ⏳ BƯỚC 7: CHỜ DEPLOYMENTS
+# ==============================================
+
+print_status "Bước 7: Đang chờ deployments..."
+kubectl wait --for=condition=available --timeout=300s deployment --all -n blog-microservices >/dev/null 2>&1 || {
+    print_warning "Một số deployments có thể mất nhiều thời gian để sẵn sàng"
 }
+print_success "Tất cả deployments đã sẵn sàng"
+echo ""
 
-# Dừng các port-forwards hiện tại trước
-stop_existing_port_forwards
+# ==============================================
+# 🌐 BƯỚC 8: KHỞI ĐỘNG PORT FORWARDS
+# ==============================================
 
-print_status "📊 Đang khởi động Monitoring Dashboards:"
+print_status "Bước 8: Khởi động port forwards..."
 
-# Khởi động các monitoring tools
-monitoring_services=(
-    "grafana:3000:istio-system"
-    "prometheus:9090:istio-system"
-)
+# Dừng port-forwards cũ
+pkill -f "kubectl port-forward" 2>/dev/null || true
+sleep 2
 
-app_services=(
-    "frontend:3000:blog-microservices"
-)
+# Khởi động monitoring dashboards
+monitoring_services=("grafana:3000:istio-system" "prometheus:9090:istio-system")
+app_services=("frontend:3000:blog-microservices")
 
+print_status "📊 Monitoring Dashboards:"
 for service_info in "${monitoring_services[@]}"; do
-    IFS=':' read -r service_name service_port namespace <<< "$service_info"
-    port=$(find_available_port $service_port)
-    if [ "$port" != "0" ]; then
-        kubectl port-forward svc/$service_name $port:$service_port -n $namespace > /dev/null 2>&1 &
+    IFS=':' read -r name port namespace <<< "$service_info"
+    available_port=$(find_available_port $port)
+    
+    if [ "$available_port" != "0" ]; then
+        print_status "Khởi động port-forward cho $name..."
+        kubectl port-forward svc/$name $available_port:$port -n $namespace >/dev/null 2>&1 &
         pid=$!
-        if [ "$service_name" == "grafana" ]; then
-            echo "   ✅ Grafana: http://localhost:$port (admin/admin) - PID: $pid"
+        sleep 3
+        # Kiểm tra port có đang listen không
+        if lsof -Pi :$available_port -sTCP:LISTEN -t >/dev/null 2>&1; then
+            if [ "$name" == "grafana" ]; then
+                echo "   ✅ Grafana: http://localhost:$available_port (admin/admin) - PID: $pid"
+            else
+                echo "   ✅ Prometheus: http://localhost:$available_port - PID: $pid"
+            fi
         else
-            service_display=$(echo "$service_name" | sed 's/^./\U&/')
-            echo "   ✅ $service_display: http://localhost:$port - PID: $pid"
+            echo "   ❌ $name: Không thể khởi động port-forward trên port $available_port"
+            kill $pid 2>/dev/null || true
         fi
     else
-        service_display=$(echo "$service_name" | sed 's/^./\U&/')
-        echo "   ❌ $service_display: Không tìm thấy port có sẵn"
+        echo "   ❌ $name: Không có port khả dụng"
     fi
 done
 
+print_status "🖥️ Ứng dụng:"
 for service_info in "${app_services[@]}"; do
-    IFS=':' read -r service_name service_port namespace <<< "$service_info"
-    port=$(find_available_port 8080)
-    if [ "$port" != "0" ]; then
-        kubectl port-forward svc/$service_name $port:$service_port -n $namespace > /dev/null 2>&1 &
+    IFS=':' read -r name port namespace <<< "$service_info"
+    available_port=$(find_available_port 8080)
+    
+    if [ "$available_port" != "0" ]; then
+        kubectl port-forward svc/$name $available_port:$port -n $namespace >/dev/null 2>&1 &
         pid=$!
-        echo "   ✅ Frontend App: http://localhost:$port - PID: $pid"
-        FRONTEND_PORT=$port
+        echo "   ✅ Frontend: http://localhost:$available_port - PID: $pid"
+        FRONTEND_PORT=$available_port
     else
-        echo "   ❌ Frontend: Không tìm thấy port có sẵn"
+        echo "   ❌ Frontend: Không có port khả dụng"
         FRONTEND_PORT="0"
     fi
 done
-
 echo ""
-print_success "🚀 Blog Microservices với Istio đã triển khai hoàn toàn!"
+# ==============================================
+# 🎉 TRIỂN KHAI HOÀN THÀNH
+# ==============================================
 
+print_success "🚀 Blog Microservices với Istio đã triển khai thành công!"
 echo ""
-print_status "🎯 Hành động nhanh:"
+
+print_status "🎯 Actions:"
 if [ "$FRONTEND_PORT" != "0" ]; then
-    echo "   📱 Truy cập ứng dụng: http://localhost:$FRONTEND_PORT"
+    echo "   📱 Truy cập App: http://localhost:$FRONTEND_PORT"
 fi
-echo "   🛑 Dừng tất cả Port-forwards: pkill -f 'kubectl port-forward'"
-
+echo "   🛑 Dừng tất cả: pkill -f 'kubectl port-forward'"
+echo "   🔄 Khởi động lại: ./deploy.sh"
 echo ""
-print_status "🔧 Lệnh Kubernetes hữu ích:"
+
+print_status "🔧 Các lệnh hữu ích:"
 echo "   kubectl get pods -n blog-microservices"
 echo "   kubectl get svc -n blog-microservices"
+echo "   kubectl logs -f deployment/frontend -n blog-microservices"
+echo ""
 
-# Trở về thư mục scripts
+# Quay lại thư mục scripts
 cd "${PROJECT_ROOT}/scripts"

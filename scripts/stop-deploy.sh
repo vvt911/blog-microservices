@@ -65,11 +65,51 @@ echo ""
 print_success "🎉 Hoàn tất việc dừng port-forwards!"
 
 echo ""
-print_status "� Lệnh hữu ích:"
-echo "   • Kiểm tra port-forwards: pgrep -f 'kubectl port-forward'"
+print_status "🗑️  Xóa toàn bộ deployments và resources..."
+
+# Hỏi xác nhận trước khi xóa
+echo ""
+print_warning "⚠️  CẢNH BÁO: Lệnh này sẽ XÓA HOÀN TOÀN tất cả deployments và resources!"
+echo "Bạn có chắc chắn muốn tiếp tục? (y/N)"
+read -r confirmation
+
+if [[ $confirmation =~ ^[Yy]$ ]]; then
+    print_status "Đang xóa namespace blog-microservices..."
+    kubectl delete namespace blog-microservices 2>/dev/null || print_warning "Namespace blog-microservices không tồn tại hoặc đã được xóa"
+    
+    print_status "Đang xóa monitoring components..."
+    kubectl delete deployment grafana -n istio-system 2>/dev/null || print_warning "Grafana đã được xóa hoặc không tồn tại"
+    kubectl delete deployment prometheus -n istio-system 2>/dev/null || print_warning "Prometheus đã được xóa hoặc không tồn tại"
+    
+    # Xóa services related
+    kubectl delete service grafana -n istio-system 2>/dev/null || true
+    kubectl delete service prometheus -n istio-system 2>/dev/null || true
+    
+    # Xóa configmaps nếu có
+    kubectl delete configmap blog-microservices-dashboard -n istio-system 2>/dev/null || true
+    
+    print_success "✅ Đã xóa toàn bộ deployments và resources thành công!"
+    
+    # Kiểm tra lại
+    print_status "Kiểm tra kết quả..."
+    remaining_pods=$(kubectl get pods -n blog-microservices 2>/dev/null | grep -v "No resources found" | wc -l)
+    if [ "$remaining_pods" -eq 0 ]; then
+        print_success "Tất cả resources đã được xóa sạch"
+    else
+        print_warning "Vẫn còn một số resources chưa được xóa"
+    fi
+else
+    print_warning "Hủy bỏ việc xóa deployments. Chỉ dừng port-forwards."
+fi
+
+echo ""
+print_success "🎉 Hoàn tất việc dọn dẹp hệ thống!"
+
+echo ""
+print_status "📋 Lệnh hữu ích:"
+echo "   • Kiểm tra pods còn lại: kubectl get pods -A | grep -E '(blog|grafana|prometheus)'"
 echo "   • Khởi động lại deployment: ./deploy.sh"
-echo "   • Kiểm tra pods: kubectl get pods -n blog-microservices"
-echo "   • Kiểm tra services: kubectl get svc -n blog-microservices"
+echo "   • Kiểm tra namespaces: kubectl get namespaces"
 
 # Trở về thư mục scripts
 cd "${PROJECT_ROOT}/scripts"
