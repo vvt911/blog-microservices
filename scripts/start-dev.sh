@@ -1,16 +1,16 @@
 #!/bin/bash
 
-# Start local development environment
+# Khởi động môi trường phát triển local
 set -e
 
-echo "🚀 Starting Blog Microservices in development mode..."
+echo "🚀 Đang khởi động Blog Microservices ở chế độ phát triển..."
 
-# Colors for output
+# Màu sắc cho output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[0;34m'
-NC='\033[0m' # No Color
+NC='\033[0m' # Không màu
 
 print_status() {
     echo -e "${BLUE}[INFO]${NC} $1"
@@ -20,122 +20,122 @@ print_success() {
     echo -e "${GREEN}[SUCCESS]${NC} $1"
 }
 
-# Function to check if port is available
+# Hàm kiểm tra port có sẵn không
 check_port() {
     if lsof -Pi :$1 -sTCP:LISTEN -t >/dev/null ; then
-        echo "Port $1 is already in use"
+        echo "Port $1 đã được sử dụng"
         return 1
     fi
     return 0
 }
 
-# Check Node.js installation
+# Kiểm tra cài đặt Node.js
 if ! command -v node &> /dev/null; then
-    echo "Node.js is not installed. Please install Node.js first."
+    echo "Node.js chưa được cài đặt. Vui lòng cài đặt Node.js trước."
     exit 1
 fi
 
-print_success "Node.js is available"
+print_success "Node.js đã sẵn sàng"
 
-# Check ports
-print_status "Checking if ports are available..."
+# Kiểm tra các port
+print_status "Đang kiểm tra port có sẵn không..."
 for port in 3000 3001 3002 3003 3004; do
     if ! check_port $port; then
-        echo "Please stop the process using port $port first"
+        echo "Vui lòng dừng tiến trình đang sử dụng port $port trước"
         exit 1
     fi
 done
 
-print_success "All ports are available"
+print_success "Tất cả port đều có sẵn"
 
-# Install dependencies for all services
-print_status "Installing dependencies..."
+# Cài đặt dependencies cho tất cả services
+print_status "Đang cài đặt dependencies..."
 
 cd ../frontend
-print_status "Installing frontend dependencies..."
+print_status "Đang cài đặt dependencies cho frontend..."
 npm install
 
 cd ../blog-service
-print_status "Installing blog-service dependencies..."
+print_status "Đang cài đặt dependencies cho blog-service..."
 npm install
 
 cd ../comment-service
-print_status "Installing comment-service dependencies..."
+print_status "Đang cài đặt dependencies cho comment-service..."
 npm install
 
 cd ../user-service
-print_status "Installing user-service dependencies..."
+print_status "Đang cài đặt dependencies cho user-service..."
 npm install
 
 cd ../notification-service
-print_status "Installing notification-service dependencies..."
+print_status "Đang cài đặt dependencies cho notification-service..."
 npm install
 
 cd ../scripts
 
-print_success "All dependencies installed"
+print_success "Đã cài đặt xong tất cả dependencies"
 
-# Start services in background
-print_status "Starting services..."
+# Khởi động các services ở chế độ background
+print_status "Đang khởi động các services..."
 
 cd ../notification-service
-print_status "Starting notification-service on port 3004..."
+print_status "Đang khởi động notification-service trên port 3004..."
 npm start &
 NOTIFICATION_PID=$!
 
 cd ../user-service
-print_status "Starting user-service on port 3003..."
+print_status "Đang khởi động user-service trên port 3003..."
 npm start &
 USER_PID=$!
 
 cd ../comment-service
-print_status "Starting comment-service on port 3002..."
+print_status "Đang khởi động comment-service trên port 3002..."
 npm start &
 COMMENT_PID=$!
 
 cd ../blog-service
-print_status "Starting blog-service on port 3001..."
+print_status "Đang khởi động blog-service trên port 3001..."
 npm start &
 BLOG_PID=$!
 
-# Wait a bit for backend services to start
+# Đợi một chút để các backend services khởi động
 sleep 3
 
 cd ../frontend
-print_status "Starting frontend on port 3000..."
+print_status "Đang khởi động frontend trên port 3000..."
 npm start &
 FRONTEND_PID=$!
 
 cd ../scripts
 
-# Wait for services to start
+# Đợi các services khởi động
 sleep 5
 
-print_success "🎉 All services started successfully!"
+print_success "🎉 Tất cả services đã khởi động thành công!"
 echo ""
-print_status "📋 Service Information:"
+print_status "📋 Thông tin Services:"
 echo -e "   ${GREEN}Frontend:${NC}           http://localhost:3000"
 echo -e "   ${GREEN}Blog Service:${NC}       http://localhost:3001"
 echo -e "   ${GREEN}Comment Service:${NC}    http://localhost:3002"
 echo -e "   ${GREEN}User Service:${NC}       http://localhost:3003"
 echo -e "   ${GREEN}Notification Service:${NC} http://localhost:3004"
 echo ""
-print_status "🔧 Health Check URLs:"
+print_status "🔧 URLs kiểm tra tình trạng:"
 echo "   curl http://localhost:3001/health"
 echo "   curl http://localhost:3002/health"
 echo "   curl http://localhost:3003/health"
 echo "   curl http://localhost:3004/health"
 echo ""
-print_status "🛑 To stop all services:"
+print_status "🛑 Để dừng tất cả services:"
 echo "   ./stop-dev.sh"
 echo ""
 
-# Save PIDs to file for cleanup
+# Lưu PIDs vào file để cleanup
 echo $FRONTEND_PID > .frontend.pid
 echo $BLOG_PID > .blog.pid
 echo $COMMENT_PID > .comment.pid
 echo $USER_PID > .user.pid
 echo $NOTIFICATION_PID > .notification.pid
 
-print_status "PIDs saved to .*.pid files"
-print_status "Services are running in the background..."
+print_status "PIDs đã được lưu vào các file .*.pid"
+print_status "Các services đang chạy ở background..."
