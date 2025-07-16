@@ -45,8 +45,6 @@ graph TB
         subgraph "Traffic Routing Scenarios"
             Canary[Canary Deployment<br/>70% V1, 30% V2]
             ABTest[A/B Testing<br/>50% V1, 50% V2]
-            HeaderRoute[Header Routing<br/>premium → V2<br/>normal → V1]
-            FaultInjection[Fault Injection<br/>Error simulation]
         end
         
         subgraph "istio-system namespace"
@@ -88,8 +86,6 @@ graph TB
     %% Traffic Scenarios
     Canary -.-> VS2
     ABTest -.-> VS2
-    HeaderRoute -.-> VS2
-    FaultInjection -.-> VS2
     
     %% Monitoring (Envoy Sidecar)
     Frontend -.-> Prometheus
@@ -116,7 +112,7 @@ graph TB
     class Prometheus,Grafana monitoring
     class User,Minikube,Gateway external
     class VS1,VS2,VS3,VS4,VS5,DR1,DR2,DR3,DR4,DR5 istio
-    class Canary,ABTest,HeaderRoute,FaultInjection traffic
+    class Canary,ABTest traffic
 ```
 
 ## Data Flow Details
@@ -189,44 +185,6 @@ graph TB
     class BlogV1,V1Traffic,Metrics1 v1
     class BlogV2,V2Traffic,Metrics2 v2
     class VS,User traffic
-```
-
-#### Header-based Routing
-```mermaid
-graph TB
-    subgraph "Header-based Routing"
-        PremiumUser[Premium User<br/>Header: user-type=premium]
-        NormalUser[Normal User<br/>No special header]
-        
-        VS[blog-service-vs<br/>VirtualService<br/>Header matching]
-        
-        subgraph "Routing Logic"
-            HeaderMatch[Header Match<br/>user-type: premium]
-            DefaultRoute[Default Route<br/>No header match]
-        end
-        
-        BlogV1[Blog Service V1<br/>Standard Features<br/>Basic UI]
-        BlogV2[Blog Service V2<br/>Premium Features<br/>Enhanced UI]
-        
-        PremiumUser --> VS
-        NormalUser --> VS
-        VS --> HeaderMatch
-        VS --> DefaultRoute
-        HeaderMatch --> BlogV2
-        DefaultRoute --> BlogV1
-        
-        BlogV1 --> StandardFeatures[Standard Features:<br/>- Basic blog CRUD<br/>- Simple UI]
-        BlogV2 --> PremiumFeatures[Premium Features:<br/>- Enhanced blog CRUD<br/>- Advanced UI<br/>- V2 features indicator]
-    end
-    
-    classDef v1 fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
-    classDef v2 fill:#e8f5e8,stroke:#2e7d32,stroke-width:2px
-    classDef premium fill:#fff3e0,stroke:#f57c00,stroke-width:2px
-    classDef normal fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
-    
-    class BlogV1,DefaultRoute,StandardFeatures,NormalUser normal
-    class BlogV2,HeaderMatch,PremiumFeatures,PremiumUser premium
-    class VS v1
 ```
 
 ### 2. Blog Post Creation Flow (V1 vs V2)
@@ -379,8 +337,6 @@ graph TB
             DefaultVS[Default VirtualService<br/>100% → blog-service v1]
             CanaryVS[Canary VirtualService<br/>70% → v1, 30% → v2]
             ABTestVS[A/B Test VirtualService<br/>50% → v1, 50% → v2]
-            HeaderVS[Header-based VirtualService<br/>premium → v2<br/>default → v1]
-            FaultVS[Fault Injection VirtualService<br/>Error simulation]
         end
         
         subgraph "DestinationRule"
@@ -390,8 +346,6 @@ graph TB
         subgraph "Traffic Scenarios"
             Scenario1[📁 k8s/traffic-scenarios/<br/>canary.yaml]
             Scenario2[📁 k8s/traffic-scenarios/<br/>ab-test.yaml]
-            Scenario3[📁 k8s/traffic-scenarios/<br/>header-routing.yaml]
-            Scenario4[📁 k8s/traffic-scenarios/<br/>fault-injection.yaml]
         end
         
         subgraph "Blog Service Deployments"
@@ -407,14 +361,10 @@ graph TB
     %% Configuration Flow
     Scenario1 --> CanaryVS
     Scenario2 --> ABTestVS
-    Scenario3 --> HeaderVS
-    Scenario4 --> FaultVS
     
     %% Traffic Flow
     CanaryVS --> DR
     ABTestVS --> DR
-    HeaderVS --> DR
-    FaultVS --> DR
     DefaultVS --> DR
     
     DR --> BlogSvc
@@ -427,10 +377,10 @@ graph TB
     classDef v2 fill:#e8f5e8,stroke:#2e7d32,stroke-width:2px
     classDef scenarios fill:#fff3e0,stroke:#e65100,stroke-width:2px
     
-    class DefaultVS,CanaryVS,ABTestVS,HeaderVS,FaultVS,DR,BlogSvc config
+    class DefaultVS,CanaryVS,ABTestVS,DR,BlogSvc config
     class BlogV1Deploy v1
     class BlogV2Deploy v2
-    class Scenario1,Scenario2,Scenario3,Scenario4 scenarios
+    class Scenario1,Scenario2 scenarios
 ```
 
 ## Security & Configuration
@@ -561,7 +511,7 @@ graph TB
     end
     
     subgraph "Traffic Distribution Strategy"
-        ProductionUse[Production Use Cases:<br/>- Canary: 70% V1, 30% V2<br/>- A/B Test: 50% V1, 50% V2<br/>- Header-based: Premium → V2<br/>- Fault Injection: Error simulation]
+        ProductionUse[Production Use Cases:<br/>- Canary: 70% V1, 30% V2<br/>- A/B Test: 50% V1, 50% V2<br/>- Gradual rollout strategy]
         
         TestingStrategy[Testing Strategy:<br/>- Gradual rollout<br/>- Feature validation<br/>- Performance comparison<br/>- User experience testing]
     end
