@@ -68,6 +68,11 @@ for service in "${services[@]}"; do
     docker build -t ${service}:latest . -q
 done
 
+# Build blog-service-v2 cho traffic routing demo
+cd "${PROJECT_ROOT}/blog-service-v2"
+print_status "Đang build blog-service-v2..."
+docker build -t blog-service:v2 . -q
+
 print_success "Tất cả Docker images đã build xong"
 echo ""
 
@@ -117,6 +122,7 @@ EOF
 
 # Triển khai resources
 kubectl apply -f services.yaml >/dev/null
+kubectl apply -f blog-service-v2.yaml >/dev/null
 kubectl apply -f istio-gateway.yaml >/dev/null
 kubectl apply -f destination-rules.yaml >/dev/null
 
@@ -263,6 +269,11 @@ print_status "🔧 Các lệnh hữu ích:"
 echo "   kubectl get pods -n blog-microservices"
 echo "   kubectl get svc -n blog-microservices"
 echo "   kubectl logs -f deployment/frontend -n blog-microservices"
+echo ""
+
+print_status "🎯 Demo Traffic Routing:"
+echo "   ./scripts/demo.sh - Chạy demo traffic routing"
+echo "   kubectl get pods -n blog-microservices -l app=blog-service - Xem các pod"
 echo ""
 
 # Quay lại thư mục scripts

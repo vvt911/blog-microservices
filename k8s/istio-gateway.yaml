@@ -34,7 +34,7 @@ spec:
         port:
           number: 3000
 ---
-# Blog Service Virtual Service
+# Blog Service Virtual Service (Default routing to V1)
 apiVersion: networking.istio.io/v1beta1
 kind: VirtualService
 metadata:
@@ -47,8 +47,7 @@ spec:
   - route:
     - destination:
         host: blog-service
-        port:
-          number: 3001
+        subset: v1
 ---
 # Comment Service Virtual Service
 apiVersion: networking.istio.io/v1beta1

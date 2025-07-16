@@ -1,0 +1,29 @@
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: blog-service-vs
+  namespace: blog-microservices
+spec:
+  hosts:
+  - blog-service
+  http:
+  - match:
+    - headers:
+        user-type:
+          exact: premium
+    route:
+    - destination:
+        host: blog-service
+        subset: v2
+  - match:
+    - headers:
+        version:
+          exact: v2
+    route:
+    - destination:
+        host: blog-service
+        subset: v2
+  - route:
+    - destination:
+        host: blog-service
+        subset: v1
