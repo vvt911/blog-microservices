@@ -8,34 +8,36 @@ Hệ thống Blog Microservices là một ứng dụng demo được thiết k�
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────────────┐
-│                                 ISTIO SERVICE MESH                                  │
+│                        ISTIO SERVICE MESH (Minikube)                                │
 │                                                                                     │
-│  ┌─────────────────┐                                                               │
-│  │   Istio Gateway │  (Port 80)                                                   │
-│  │                 │                                                               │
-│  └─────────┬───────┘                                                               │
-│            │                                                                       │
-│            ▼                                                                       │
-│  ┌─────────────────┐    ┌──────────────────┐    ┌─────────────────────┐          │
-│  │   Frontend      │    │   Blog Service   │    │  Notification       │          │
-│  │   (Port: 3000)  │───▶│   (Port: 3001)   │───▶│  Service            │          │
-│  │                 │    │                  │    │  (Port: 3004)       │          │
-│  └─────────┬───────┘    └──────────────────┘    └─────────────────────┘          │
-│            │                        │                                             │
-│            │                        │                                             │
-│            ▼                        ▼                                             │
-│  ┌─────────────────┐    ┌──────────────────┐                                     │
-│  │ Comment Service │    │   User Service   │                                     │
-│  │ (Port: 3002)    │    │   (Port: 3003)   │                                     │
-│  └─────────────────┘    └──────────────────┘                                     │
+│  ┌─────────────────┐                                                                │
+│  │ blog-gateway    │  (Port 80)                                                     │
+│  │ (Istio Gateway) │                                                                │
+│  └─────────┬───────┘                                                                │
+│            │                                                                        │
+│            ▼                                                                        │  
+│  ┌─────────────────┐    ┌──────────────────┐    ┌─────────────────────┐             │
+│  │   Frontend      │    │   Blog Service   │    │  Notification       │             │
+│  │   (Port: 3000)  │───▶│   (Port: 3001)   │───▶│  Service            │             │
+│  │ API Proxy       │    │ In-Memory Store  │    │  (Port: 3004)       │             │
+│  └─────────┬───────┘    └──────────────────┘    │ In-Memory Store     │             │
+│            │                        │           └─────────────────────┘             │
+│            │                        │                        ▲                      │
+│            ▼                        ▼                        │                      │
+│  ┌─────────────────┐    ┌──────────────────┐                │                       │
+│  │ Comment Service │    │   User Service   │                │                       │
+│  │ (Port: 3002)    │───▶│   (Port: 3003)   │───────────────┘                        │
+│  │ In-Memory Store │    │ In-Memory Store  │                                        │
+│  └─────────────────┘    └──────────────────┘                                        │
 │                                                                                     │
-│  ┌─────────────────────────────────────────────────────────────────────────────┐ │
-│  │                        MONITORING STACK                                     │ │
-│  │  ┌─────────────┐    ┌─────────────┐    ┌─────────────┐                     │ │
-│  │  │ Prometheus  │    │   Grafana   │    │    Jaeger   │                     │ │
-│  │  │ (Port:9090) │    │ (Port:3000) │    │ (Port:16686)│                     │ │
-│  │  └─────────────┘    └─────────────┘    └─────────────┘                     │ │
-│  └─────────────────────────────────────────────────────────────────────────────┘ │
+│  ┌───────────────────────────────────────────────────────────────────────────┐      │
+│  │                   MONITORING STACK (istio-system)                         │      │
+│  │  ┌─────────────┐    ┌─────────────┐                                       │      │
+│  │  │ Prometheus  │    │   Grafana   │                                       │      │
+│  │  │ (Port:9090) │    │ (Port:3000) │                                       │      │
+│  │  │ Istio Addon │    │ Istio Addon │                                       │      │
+│  │  └─────────────┘    └─────────────┘                                       │      │
+│  └───────────────────────────────────────────────────────────────────────────┘      │
 └─────────────────────────────────────────────────────────────────────────────────────┘
 ```
 
@@ -58,100 +60,122 @@ Hệ thống Blog Microservices là một ứng dụng demo được thiết k�
 ### 2. **Luồng Tạo Blog Post**
 
 ```
-[Frontend] → POST /api/blogs
+[User] → POST /api/blogs {title, content, author}
+    ↓
+[Frontend] → POST /blogs {title, content, author}
     ↓
 [Blog Service] (Port 3001)
-    ↓ Store blog data
-[In-Memory Storage]
-    ↓ Send notification
+    ↓ Store in memory array
+[In-Memory Storage: blogs[]]
+    ↓ POST /notify {type: "blog_created", message, blogId}
 [Notification Service] (Port 3004)
-    ↓ Broadcast to subscribers
-[All Connected Clients]
+    ↓ Store in memory array
+[In-Memory Storage: notifications[]]
 ```
 
 ### 3. **Luồng Tạo Comment**
 
 ```
-[Frontend] → POST /api/comments
+[User] → POST /api/comments {blogId, author, content}
+    ↓
+[Frontend] → POST /comments {blogId, author, content}
     ↓
 [Comment Service] (Port 3002)
-    ↓ Validate blog exists
+    ↓ GET /blogs/{blogId} (validate blog exists)
 [Blog Service] (Port 3001)
-    ↓ Store comment
-[Comment Service Storage]
-    ↓ Notify blog author
+    ↓ Store comment in memory array
+[Comment Service Storage: comments[]]
+    ↓ POST /notify {type: "comment_created", message, commentId}
 [Notification Service] (Port 3004)
 ```
 
 ### 4. **Luồng Quản lý User**
 
 ```
-[Frontend] → POST /api/users
+[User] → POST /api/users {name, email, role, bio}
+    ↓
+[Frontend] → POST /users {name, email, role, bio}
     ↓
 [User Service] (Port 3003)
-    ↓ Store user data
-[In-Memory Storage]
-    ↓ Update user stats
-[User Service]
-    ↓ Broadcast user activity
+    ↓ Store user data in memory array
+[In-Memory Storage: users[]]
+    ↓ POST /notify {type: "user_registered", message, userId}
 [Notification Service] (Port 3004)
 ```
 
 ## 🏠 Chi tiết từng Microservice
 
 ### 1. **Frontend Service** 
-- **Chức năng**: Giao diện người dùng web
-- **Công nghệ**: HTML, CSS, JavaScript, Express.js
+- **Chức năng**: API Gateway + Static Files Server
+- **Công nghệ**: Node.js, Express.js, HTML/CSS/JavaScript
 - **Port**: 3000
 - **Chức năng chính**:
-  - Serve static files (HTML, CSS, JS)
-  - Proxy API calls đến backend services
-  - Real-time updates via Server-Sent Events
-  - Responsive UI với Bootstrap
+  - Serve static files từ /public (index.html, script.js, style.css)
+  - API proxy cho tất cả /api/* routes
+  - Environment variables: BLOG_SERVICE_URL, COMMENT_SERVICE_URL, USER_SERVICE_URL, NOTIFICATION_SERVICE_URL
+- **API Routes**: Proxy tất cả requests đến backend services
 
 ### 2. **Blog Service**
 - **Chức năng**: Quản lý bài viết blog
 - **Công nghệ**: Node.js, Express.js
 - **Port**: 3001
+- **Data Storage**: In-memory array `blogs[]` với sample data
 - **API Endpoints**:
-  - `GET /api/blogs` - Lấy danh sách blogs
-  - `POST /api/blogs` - Tạo blog mới
-  - `PUT /api/blogs/:id` - Cập nhật blog
-  - `DELETE /api/blogs/:id` - Xóa blog
-  - `POST /api/blogs/:id/like` - Like blog
-- **Tích hợp**: Gửi notification khi có blog mới
+  - `GET /blogs` - Lấy danh sách blogs
+  - `POST /blogs` - Tạo blog mới
+  - `GET /blogs/:id` - Lấy blog theo ID
+  - `PUT /blogs/:id` - Cập nhật blog
+  - `POST /blogs/:id/like` - Like blog
+  - `DELETE /blogs/:id` - Xóa blog
+  - `GET /stats` - Thống kê blog
+  - `GET /health` - Health check
+- **Tích hợp**: Fire-and-forget POST /notify đến Notification Service
 
 ### 3. **Comment Service**
 - **Chức năng**: Quản lý bình luận
 - **Công nghệ**: Node.js, Express.js
 - **Port**: 3002
+- **Data Storage**: In-memory array `comments[]` với sample data
 - **API Endpoints**:
-  - `GET /api/comments` - Lấy comments theo blog
-  - `POST /api/comments` - Tạo comment mới
-  - `DELETE /api/comments/:id` - Xóa comment
-- **Tích hợp**: Validate blog tồn tại, gửi notification
+  - `GET /comments` - Lấy tất cả comments
+  - `GET /comments/blog/:blogId` - Lấy comments theo blog
+  - `GET /comments/:id` - Lấy comment theo ID
+  - `POST /comments` - Tạo comment mới
+  - `PUT /comments/:id` - Cập nhật comment
+  - `POST /comments/:id/like` - Like comment
+  - `DELETE /comments/:id` - Xóa comment
+  - `GET /health` - Health check
+- **Tích hợp**: Validate blog exists qua GET /blogs/:id, gửi notification
 
 ### 4. **User Service**
 - **Chức năng**: Quản lý người dùng
 - **Công nghệ**: Node.js, Express.js
 - **Port**: 3003
+- **Data Storage**: In-memory array `users[]` với sample data
 - **API Endpoints**:
-  - `GET /api/users` - Lấy danh sách users
-  - `POST /api/users` - Tạo user mới
-  - `PUT /api/users/:id` - Cập nhật user
-  - `DELETE /api/users/:id` - Xóa user
-  - `GET /api/users/stats` - Thống kê user
-- **Tích hợp**: Tracking user activity
+  - `GET /users` - Lấy danh sách users (có filter role, active)
+  - `GET /users/:id` - Lấy user theo ID
+  - `POST /users` - Tạo user mới
+  - `PUT /users/:id` - Cập nhật user
+  - `DELETE /users/:id` - Xóa user
+  - `GET /users/stats` - Thống kê user
+  - `GET /health` - Health check
+- **Tích hợp**: Gửi notification khi user mới đăng ký
 
 ### 5. **Notification Service**
 - **Chức năng**: Quản lý thông báo
-- **Công nghệ**: Node.js, Express.js, Server-Sent Events
+- **Công nghệ**: Node.js, Express.js
 - **Port**: 3004
+- **Data Storage**: In-memory array `notifications[]` với sample data
 - **API Endpoints**:
-  - `GET /api/notifications` - Lấy notifications
-  - `POST /api/notifications` - Tạo notification mới
-  - `GET /api/notifications/stream` - SSE stream
-- **Tích hợp**: Broadcast real-time notifications
+  - `GET /notifications` - Lấy notifications (có filter type, read, priority)
+  - `GET /notifications/:id` - Lấy notification theo ID
+  - `POST /notify` - Tạo notification mới
+  - `PATCH /notifications/:id/read` - Đánh dấu đã đọc
+  - `PATCH /notifications/read-all` - Đánh dấu tất cả đã đọc
+  - `DELETE /notifications/:id` - Xóa notification
+  - `GET /health` - Health check
+- **Tích hợp**: Nhận notifications từ tất cả services
 
 ## 🔧 Istio Service Mesh Components
 
@@ -161,7 +185,10 @@ apiVersion: networking.istio.io/v1beta1
 kind: Gateway
 metadata:
   name: blog-gateway
+  namespace: blog-microservices
 spec:
+  selector:
+    istio: ingressgateway
   servers:
   - port:
       number: 80
@@ -172,24 +199,18 @@ spec:
 ```
 
 ### 2. **Virtual Services**
-- **blog-virtualservice**: Route traffic từ gateway đến frontend
-- **blog-service-vs**: Internal routing cho blog service
-- **comment-service-vs**: Internal routing cho comment service
-- **user-service-vs**: Internal routing cho user service
-- **notification-service-vs**: Internal routing cho notification service
+- **blog-virtualservice**: Route traffic từ gateway đến frontend (/ → frontend:3000)
+- **blog-service-vs**: Internal routing cho blog service (blog-service → :3001)
+- **comment-service-vs**: Internal routing cho comment service (comment-service → :3002)
+- **user-service-vs**: Internal routing cho user service (user-service → :3003)
+- **notification-service-vs**: Internal routing cho notification service (notification-service → :3004)
 
 ### 3. **Destination Rules**
-```yaml
-apiVersion: networking.istio.io/v1beta1
-kind: DestinationRule
-metadata:
-  name: blog-destination-rules
-spec:
-  host: blog-service
-  trafficPolicy:
-    loadBalancer:
-      simple: ROUND_ROBIN
-```
+- **frontend-dr**: subset v1 với labels version: v1
+- **blog-service-dr**: subset v1 với labels version: v1
+- **comment-service-dr**: subset v1 với labels version: v1
+- **user-service-dr**: subset v1 với labels version: v1
+- **notification-service-dr**: subset v1 với labels version: v1
 
 ## 🐳 Containerization & Deployment
 
@@ -211,43 +232,57 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: blog-service
+  namespace: blog-microservices
+  labels:
+    app: blog-service
+    version: v1
 spec:
   replicas: 1
   selector:
     matchLabels:
       app: blog-service
+      version: v1
   template:
+    metadata:
+      labels:
+        app: blog-service
+        version: v1
     spec:
       containers:
       - name: blog-service
         image: blog-service:latest
+        imagePullPolicy: Never
         ports:
         - containerPort: 3001
+        env:
+        - name: NOTIFICATION_SERVICE_URL
+          value: "http://notification-service:3004"
 ```
 
 ## 📊 Monitoring & Observability
 
 ### 1. **Prometheus**
-- Thu thập metrics từ Istio sidecars
-- Monitor performance của từng service
-- Custom metrics cho business logic
+- Thu thập metrics từ Istio Envoy sidecars
+- Deployed từ Istio addon: `kubectl apply -f https://raw.githubusercontent.com/istio/istio/release-1.20/samples/addons/prometheus.yaml`
+- Port: 9090
+- Automatic service discovery cho tất cả services
 
 ### 2. **Grafana**
-- Dashboards cho system metrics
-- Service performance monitoring
-- Custom dashboards cho blog metrics
-
-### 3. **Jaeger (Optional)**
-- Distributed tracing
-- Request flow tracking
-- Performance bottleneck identification
+- Dashboards cho Istio service mesh metrics
+- Deployed từ Istio addon: `kubectl apply -f https://raw.githubusercontent.com/istio/istio/release-1.20/samples/addons/grafana.yaml`
+- Port: 3000
+- Pre-configured dashboards cho Istio
 
 ## 🚀 Deployment Process
 
 ### 1. **Development Mode**
 ```bash
-# Start all services locally
-./scripts/start-dev.sh
+# Start all services locally (manual)
+cd blog-service && npm start &
+cd comment-service && npm start &
+cd user-service && npm start &
+cd notification-service && npm start &
+cd frontend && npm start &
 
 # Each service runs on its own port
 # Frontend: http://localhost:3000
@@ -257,120 +292,141 @@ spec:
 # Notification: http://localhost:3004
 ```
 
-### 2. **Production Mode (Kubernetes + Istio)**
+### 2. **Production Mode (Minikube + Istio)**
 ```bash
 # Build and deploy to Kubernetes
 ./scripts/deploy.sh
 
 # This will:
-# 1. Build Docker images
-# 2. Deploy to Kubernetes
-# 3. Configure Istio
-# 4. Setup monitoring
-# 5. Expose via Istio Gateway
+# 1. Check Minikube status
+# 2. Build Docker images (imagePullPolicy: Never)
+# 3. Deploy to Kubernetes với namespace blog-microservices
+# 4. Configure Istio (Gateway, Virtual Services, Destination Rules)
+# 5. Setup monitoring (Prometheus + Grafana từ Istio addons)
+# 6. Port-forward services để access
 ```
 
 ## 🔐 Security Features
 
 ### 1. **Istio Security**
-- Automatic mTLS between services
-- JWT validation at gateway
-- Network policies enforcement
+- Automatic mTLS between services (default Istio behavior)
+- Namespace với istio-injection: enabled
+- Envoy sidecar proxy cho tất cả services
 
 ### 2. **Service Security**
-- CORS configuration
-- Input validation
-- Rate limiting (có thể mở rộng)
+- CORS configuration cho tất cả services
+- Input validation cho required fields
+- Health check endpoints (/health) cho tất cả services
+- Environment variables cho service URLs
 
 ## 🌐 Network Communication
 
 ### 1. **Service-to-Service Communication**
 - HTTP/REST APIs
-- Istio sidecar proxy handling
-- Automatic service discovery
-- Load balancing
-- Circuit breaker (có thể cấu hình)
+- Axios HTTP client cho inter-service calls
+- Environment variables cho service URLs
+- Istio Envoy sidecar proxy handling
+- Automatic service discovery trong Kubernetes
+- Fire-and-forget pattern cho notifications
 
 ### 2. **External Communication**
-- Istio Gateway làm single entry point
-- SSL termination tại gateway
-- Path-based routing
+- Istio Gateway làm single entry point (port 80)
+- Frontend service routing tất cả external requests
+- Path-based routing: / → frontend, backend services internal only
 
 ## 📈 Scalability & Performance
 
 ### 1. **Horizontal Scaling**
-- Kubernetes HPA support
-- Istio load balancing
-- Stateless service design
+- Kubernetes replicas (hiện tại: 1 replica cho mỗi service)
+- Istio load balancing với Envoy sidecars
+- Stateless service design với in-memory storage
+- Ready cho HPA (Horizontal Pod Autoscaler)
 
-### 2. **Performance Optimization**
-- Connection pooling
-- Request timeout configuration
-- Retry policies
-- Circuit breaker patterns
+### 2. **Performance Considerations**
+- In-memory data storage (nhanh nhưng không persistent)
+- Async notification pattern (fire-and-forget)
+- Express.js middleware để handle requests
+- Kubernetes resource limits (có thể cấu hình)
 
 ## 🔄 CI/CD Integration
 
 ### 1. **Build Process**
 ```bash
-# Build all Docker images
-docker build -t blog-service:latest ./blog-service
-docker build -t comment-service:latest ./comment-service
-docker build -t user-service:latest ./user-service
-docker build -t notification-service:latest ./notification-service
-docker build -t blog-frontend:latest ./frontend
+# Build all Docker images (thực hiện trong deploy.sh)
+cd blog-service && docker build -t blog-service:latest .
+cd comment-service && docker build -t comment-service:latest .
+cd user-service && docker build -t user-service:latest .
+cd notification-service && docker build -t notification-service:latest .
+cd frontend && docker build -t blog-frontend:latest .
+
+# Load images vào Minikube
+eval $(minikube docker-env)
 ```
 
 ### 2. **Deployment Script**
-- Automated image building
+- Automated deployment qua `./scripts/deploy.sh`
+- Minikube environment setup
+- Docker image building với local registry
 - Kubernetes resource deployment
-- Istio configuration
-- Health checks
-- Monitoring setup
+- Istio configuration application
+- Monitoring setup (Prometheus + Grafana)
+- Port forwarding setup cho local access
 
 ## 🎯 Key Features Demonstration
 
 ### 1. **Microservices Architecture**
-- Service independence
-- Technology diversity support
-- Fault isolation
-- Individual scaling
+- 5 independent services với different responsibilities
+- In-memory data storage cho demo purposes
+- HTTP/REST API communication
+- Service independence và fault isolation
 
 ### 2. **Istio Service Mesh**
-- Traffic management
-- Security policies
-- Observability
-- Resilience patterns
+- Automatic sidecar injection
+- Service-to-service mTLS
+- Traffic management với Virtual Services và Destination Rules
+- Observability với Prometheus metrics
 
-### 3. **Real-time Communication**
-- Server-Sent Events
-- Live notifications
-- Real-time updates
+### 3. **Kubernetes Deployment**
+- Minikube local cluster
+- Namespace isolation
+- Service discovery
+- Configuration management qua environment variables
 
 ### 4. **Monitoring & Observability**
-- Metrics collection
-- Distributed tracing
-- Performance monitoring
-- Custom dashboards
+- Istio addon Prometheus cho metrics collection
+- Istio addon Grafana cho visualization
+- Health check endpoints
+- Console logging
 
 ## 🛠️ Troubleshooting
 
 ### Common Issues
-1. **Port conflicts**: Deploy script tự động tìm port available
-2. **Service communication**: Kiểm tra Istio sidecar injection
-3. **Image pulling**: Sử dụng `imagePullPolicy: Never` cho local images
-4. **DNS resolution**: Ensure proper service naming trong Kubernetes
+1. **Port conflicts**: Deploy script tự động tìm available ports
+2. **Minikube not running**: Kiểm tra `minikube status`
+3. **Istio not installed**: Cần install Istio trước khi deploy
+4. **Image pulling**: Sử dụng `imagePullPolicy: Never` cho local images
+5. **Service communication**: Kiểm tra environment variables và service URLs
 
 ### Debug Commands
 ```bash
+# Check Minikube status
+minikube status
+
 # Check service status
 kubectl get pods -n blog-microservices
+kubectl get svc -n blog-microservices
 
 # Check Istio configuration
-istioctl proxy-config cluster blog-service-xxx
+kubectl get gateway -n blog-microservices
+kubectl get virtualservice -n blog-microservices
+kubectl get destinationrule -n blog-microservices
 
 # View logs
 kubectl logs -f deployment/blog-service -n blog-microservices
+kubectl logs -f deployment/frontend -n blog-microservices
+
+# Check Istio sidecar injection
+kubectl get pods -n blog-microservices -o jsonpath='{range .items[*]}{.metadata.name}{"\t"}{.spec.containers[*].name}{"\n"}{end}'
 ```
 
 ---

@@ -4,102 +4,95 @@
 
 ```mermaid
 graph TB
-    subgraph "🌐 External Traffic"
+    subgraph "🌐 External Access"
         User[👤 User Browser]
-        LoadBalancer[⚖️ Load Balancer]
+        Minikube[🔧 Minikube Cluster]
     end
     
     subgraph "🔒 Istio Service Mesh"
-        Gateway[🚪 Istio Gateway<br/>Port: 80]
+        subgraph "🌍 Istio Gateway"
+            Gateway[🚪 blog-gateway<br/>Port: 80<br/>Host: *]
+        end
         
-        subgraph "🏢 Blog Microservices Namespace"
+        subgraph "🏢 blog-microservices namespace"
             subgraph "Frontend Layer"
-                Frontend[🖥️ Frontend Service<br/>Port: 3000<br/>HTML/CSS/JS]
+                Frontend[🖥️ Frontend<br/>Port: 3000<br/>API Proxy + Static Files]
             end
             
-            subgraph "Business Logic Layer"
-                BlogService[📝 Blog Service<br/>Port: 3001<br/>CRUD Blogs]
-                CommentService[💬 Comment Service<br/>Port: 3002<br/>CRUD Comments]
-                UserService[👥 User Service<br/>Port: 3003<br/>User Management]
-                NotificationService[🔔 Notification Service<br/>Port: 3004<br/>Real-time Notifications]
-            end
-            
-            subgraph "Data Layer"
-                BlogDB[(📚 Blog Data<br/>In-Memory)]
-                CommentDB[(💭 Comment Data<br/>In-Memory)]
-                UserDB[(👤 User Data<br/>In-Memory)]
-                NotificationDB[(🔔 Notification Data<br/>In-Memory)]
+            subgraph "Backend Services"
+                BlogService[📝 Blog Service<br/>Port: 3001<br/>In-Memory Storage]
+                CommentService[💬 Comment Service<br/>Port: 3002<br/>In-Memory Storage]
+                UserService[👥 User Service<br/>Port: 3003<br/>In-Memory Storage]
+                NotificationService[🔔 Notification Service<br/>Port: 3004<br/>In-Memory Storage]
             end
         end
         
-        subgraph "📈 Monitoring Stack"
+        subgraph "🛡️ Istio Networking"
+            VS1[📋 blog-virtualservice<br/>/ → frontend:3000]
+            VS2[📋 blog-service-vs<br/>blog-service → :3001]
+            VS3[📋 comment-service-vs<br/>comment-service → :3002]
+            VS4[📋 user-service-vs<br/>user-service → :3003]
+            VS5[📋 notification-service-vs<br/>notification-service → :3004]
+            
+            DR1[🎯 frontend-dr<br/>subset: v1]
+            DR2[🎯 blog-service-dr<br/>subset: v1]
+            DR3[🎯 comment-service-dr<br/>subset: v1]
+            DR4[🎯 user-service-dr<br/>subset: v1]
+            DR5[🎯 notification-service-dr<br/>subset: v1]
+        end
+        
+        subgraph "📊 istio-system namespace"
             Prometheus[📊 Prometheus<br/>Port: 9090<br/>Metrics Collection]
             Grafana[📈 Grafana<br/>Port: 3000<br/>Visualization]
-            Jaeger[🔍 Jaeger<br/>Port: 16686<br/>Tracing]
         end
-    end
-    
-    subgraph "☁️ Kubernetes Infrastructure"
-        K8sAPI[⚙️ Kubernetes API]
-        Pods[📦 Pods]
-        Services[🔗 Services]
-        Ingress[🌐 Ingress]
     end
     
     %% User Flow
-    User --> LoadBalancer
-    LoadBalancer --> Gateway
+    User --> Minikube
+    Minikube --> Gateway
     Gateway --> Frontend
     
-    %% Frontend to Services
-    Frontend --> BlogService
-    Frontend --> CommentService
-    Frontend --> UserService
-    Frontend --> NotificationService
+    %% Frontend API Proxy Routes
+    Frontend --> |/api/blogs| BlogService
+    Frontend --> |/api/comments| CommentService
+    Frontend --> |/api/users| UserService
+    Frontend --> |/api/notifications| NotificationService
     
-    %% Service Interactions
-    BlogService --> NotificationService
-    CommentService --> BlogService
-    CommentService --> NotificationService
-    UserService --> NotificationService
+    %% Inter-Service Communication
+    BlogService --> |POST /notify| NotificationService
+    CommentService --> |GET /blogs/:id| BlogService
+    CommentService --> |POST /notify| NotificationService
+    UserService --> |POST /notify| NotificationService
     
-    %% Data Connections
-    BlogService --> BlogDB
-    CommentService --> CommentDB
-    UserService --> UserDB
-    NotificationService --> NotificationDB
+    %% Istio Configuration
+    Gateway -.-> VS1
+    VS1 -.-> DR1
+    VS2 -.-> DR2
+    VS3 -.-> DR3
+    VS4 -.-> DR4
+    VS5 -.-> DR5
     
-    %% Monitoring
+    %% Monitoring (Envoy Sidecar)
+    Frontend -.-> Prometheus
     BlogService -.-> Prometheus
     CommentService -.-> Prometheus
     UserService -.-> Prometheus
     NotificationService -.-> Prometheus
-    Frontend -.-> Prometheus
     
     Prometheus --> Grafana
-    
-    %% Kubernetes
-    Gateway --> K8sAPI
-    Frontend --> Pods
-    BlogService --> Pods
-    CommentService --> Pods
-    UserService --> Pods
-    NotificationService --> Pods
     
     %% Styling
     classDef frontend fill:#e1f5fe,stroke:#01579b,stroke-width:2px
     classDef backend fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
-    classDef database fill:#e8f5e8,stroke:#1b5e20,stroke-width:2px
     classDef monitoring fill:#fff3e0,stroke:#e65100,stroke-width:2px
-    classDef infrastructure fill:#fce4ec,stroke:#880e4f,stroke-width:2px
     classDef external fill:#f1f8e9,stroke:#33691e,stroke-width:2px
+    classDef istio fill:#fce4ec,stroke:#880e4f,stroke-width:2px
     
     class Frontend frontend
     class BlogService,CommentService,UserService,NotificationService backend
-    class BlogDB,CommentDB,UserDB,NotificationDB database
-    class Prometheus,Grafana,Jaeger monitoring
-    class K8sAPI,Pods,Services,Ingress infrastructure
-    class User,LoadBalancer,Gateway external
+    class Prometheus,Grafana monitoring
+    class User,Minikube,Gateway external
+    class VS1,VS2,VS3,VS4,VS5,DR1,DR2,DR3,DR4,DR5 istio
 ```
 
 ## 🔄 Luồng Dữ liệu Chi tiết
@@ -112,19 +105,17 @@ sequenceDiagram
     participant F as 🖥️ Frontend
     participant B as 📝 Blog Service
     participant N as 🔔 Notification Service
-    participant DB as 📚 Blog Database
     
-    U->>F: POST /create-blog
-    F->>B: POST /api/blogs
-    B->>DB: Store blog data
-    DB-->>B: Success
-    B->>N: POST /api/notifications
-    N->>N: Broadcast to SSE clients
-    N-->>B: Notification sent
-    B-->>F: Blog created
+    U->>F: POST /api/blogs<br/>{title, content, author}
+    F->>B: POST /blogs<br/>{title, content, author}
+    B->>B: Create blog object<br/>Store in memory array
+    B->>N: POST /notify<br/>{type: "blog_created", message, blogId}
+    N->>N: Create notification<br/>Store in memory array
+    N-->>B: 201 Created
+    B-->>F: 201 Created<br/>{id, title, content, author, createdAt, likes}
     F-->>U: Success response
     
-    Note over N: Real-time notification<br/>sent to all connected users
+    Note over B,N: Fire-and-forget notification<br/>Error handling with try-catch
 ```
 
 ### 2. Luồng Tạo Comment
@@ -136,119 +127,127 @@ sequenceDiagram
     participant C as 💬 Comment Service
     participant B as 📝 Blog Service
     participant N as 🔔 Notification Service
-    participant CDB as 💭 Comment DB
     
-    U->>F: POST /create-comment
-    F->>C: POST /api/comments
-    C->>B: GET /api/blogs/:id (validate)
-    B-->>C: Blog exists
-    C->>CDB: Store comment
-    CDB-->>C: Success
-    C->>N: POST /api/notifications
-    N->>N: Notify blog author
-    N-->>C: Notification sent
-    C-->>F: Comment created
+    U->>F: POST /api/comments<br/>{blogId, author, content}
+    F->>C: POST /comments<br/>{blogId, author, content}
+    C->>B: GET /blogs/{blogId}<br/>(validate blog exists)
+    B-->>C: 200 OK<br/>{blog object}
+    C->>C: Create comment object<br/>Store in memory array
+    C->>N: POST /notify<br/>{type: "comment_created", message, commentId}
+    N->>N: Create notification<br/>Store in memory array
+    N-->>C: 201 Created
+    C-->>F: 201 Created<br/>{id, blogId, author, content, createdAt}
     F-->>U: Success response
+    
+    Note over C,B: Validation step ensures<br/>referential integrity
 ```
 
-### 3. Luồng Real-time Notifications
+### 3. Luồng User Registration
 
 ```mermaid
 sequenceDiagram
-    participant U1 as 👤 User 1
-    participant U2 as 👤 User 2
+    participant U as 👤 User
     participant F as 🖥️ Frontend
+    participant US as 👥 User Service
     participant N as 🔔 Notification Service
     
-    U1->>F: Connect to SSE
-    F->>N: GET /api/notifications/stream
-    N-->>F: SSE Connection established
+    U->>F: POST /api/users<br/>{name, email, role, bio}
+    F->>US: POST /users<br/>{name, email, role, bio}
+    US->>US: Check email uniqueness<br/>Create user object<br/>Store in memory array
+    US->>N: POST /notify<br/>{type: "user_registered", message, userId}
+    N->>N: Create notification<br/>Store in memory array
+    N-->>US: 201 Created
+    US-->>F: 201 Created<br/>{id, name, email, role, createdAt, profilePicture}
+    F-->>U: Success response
     
-    U2->>F: Create blog post
-    F->>N: POST /api/notifications
-    N->>N: Process notification
-    N-->>F: SSE: New blog notification
-    F-->>U1: Display notification
-    
-    Note over N: Server-Sent Events<br/>for real-time updates
+    Note over US,N: Welcome notification<br/>with user details
 ```
 
-## 🏗️ Deployment Architecture
+### 4. Luồng Frontend API Proxy
+
+```mermaid
+sequenceDiagram
+    participant B as 🌐 Browser
+    participant F as 🖥️ Frontend
+    participant S as 📦 Backend Service
+    
+    B->>F: GET /api/blogs
+    F->>F: Check SERVICE_URL<br/>environment variable
+    F->>S: GET /blogs<br/>via axios
+    S-->>F: JSON response
+    F-->>B: JSON response
+    
+    Note over F: Frontend acts as API Gateway<br/>Proxy all /api/* requests
+    
+    B->>F: GET /index.html
+    F->>F: Serve static files<br/>from /public
+    F-->>B: HTML/CSS/JS files
+```
+
+## 🏗️ Kubernetes Deployment Architecture
 
 ```mermaid
 graph TB
     subgraph "🏢 Development Environment"
         DevLaptop[💻 Developer Laptop]
-        LocalDocker[🐳 Local Docker]
-        LocalServices[🔧 Local Services<br/>Port: 3000-3004]
+        LocalServices[🔧 Local Services<br/>npm start on ports 3000-3004]
     end
     
-    subgraph "☁️ Production Environment"
-        subgraph "Kubernetes Cluster"
-            subgraph "Istio System"
-                IstioGateway[🚪 Istio Gateway]
-                IstioSidecar[🔀 Envoy Sidecars]
-            end
-            
+    subgraph "☁️ Minikube Production"
+        subgraph "Docker Environment"
+            DockerImages[🐳 Docker Images<br/>blog-frontend:latest<br/>blog-service:latest<br/>comment-service:latest<br/>user-service:latest<br/>notification-service:latest]
+        end
+        
+        subgraph "Kubernetes Resources"
             subgraph "blog-microservices namespace"
-                K8sPods[📦 Service Pods]
-                K8sServices[🔗 Kubernetes Services]
-                K8sDeployments[📋 Deployments]
+                Deployments[📋 Deployments<br/>replicas: 1<br/>imagePullPolicy: Never]
+                Services[🔗 Services<br/>ClusterIP<br/>ports: 3000-3004]
+                Pods[📦 Pods<br/>with Envoy sidecars]
             end
             
             subgraph "istio-system namespace"
+                IstioGateway[🚪 Istio Gateway<br/>istio-ingressgateway]
                 IstioControl[⚙️ Istio Control Plane]
-                IstioIngress[🌐 Istio Ingress Gateway]
+                MonitoringPods[📊 Prometheus + Grafana<br/>from Istio addons]
             end
-        end
-        
-        subgraph "External Services"
-            Registry[📋 Container Registry]
-            LoadBalancer[⚖️ Load Balancer]
         end
     end
     
-    DevLaptop --> LocalDocker
-    LocalDocker --> LocalServices
+    DevLaptop --> LocalServices
+    DevLaptop --> |docker build| DockerImages
+    DockerImages --> |kubectl apply| Deployments
+    Deployments --> Pods
+    Pods --> Services
+    Services --> IstioGateway
     
-    DevLaptop --> Registry
-    Registry --> K8sDeployments
-    K8sDeployments --> K8sPods
-    K8sPods --> K8sServices
-    K8sServices --> IstioSidecar
-    IstioSidecar --> IstioGateway
-    IstioGateway --> IstioIngress
-    IstioIngress --> LoadBalancer
-    
-    IstioControl --> IstioSidecar
-    IstioControl --> IstioGateway
+    IstioControl --> |inject sidecars| Pods
+    MonitoringPods --> |scrape metrics| Pods
 ```
 
-## 🔐 Security Architecture
+## 🔐 Security & Configuration
 
 ```mermaid
 graph TB
-    subgraph "🔒 Security Layers"
-        subgraph "Network Security"
-            TLS[🔐 TLS Termination]
-            NetworkPolicy[🛡️ Network Policies]
-        end
-        
-        subgraph "Service Mesh Security"
-            mTLS[🔐 Mutual TLS]
-            JWT[🎫 JWT Validation]
-            AuthZ[🔑 Authorization]
-        end
-        
-        subgraph "Application Security"
-            CORS[🌐 CORS Configuration]
-            Validation[✅ Input Validation]
-            RateLimit[⏱️ Rate Limiting]
-        end
+    subgraph "🔒 Istio Security"
+        mTLS[🔐 Automatic mTLS<br/>Service-to-Service]
+        Injection[💉 Sidecar Injection<br/>istio-injection: enabled]
+        AuthPolicy[🛡️ Authorization Policies<br/>(Optional)]
     end
     
-    subgraph "🏢 Services"
-        Gateway[🚪 Istio Gateway]
+    subgraph "🌐 Network Configuration"
+        Gateway[🚪 Gateway<br/>Port 80, Host: *]
+        VirtualServices[📋 Virtual Services<br/>Routing Rules]
+        DestinationRules[🎯 Destination Rules<br/>v1 subsets]
+    end
+    
+    subgraph "🏢 Application Security"
+        CORS[🌐 CORS Enabled<br/>All services]
+        Validation[✅ Input Validation<br/>Required fields check]
+        HealthChecks[🏥 Health Endpoints<br/>/health on all services]
+        EnvVars[⚙️ Environment Variables<br/>Service URLs]
+    end
+    
+    subgraph "📦 Services"
         Frontend[🖥️ Frontend]
         BlogService[📝 Blog Service]
         CommentService[💬 Comment Service]
@@ -256,129 +255,113 @@ graph TB
         NotificationService[🔔 Notification Service]
     end
     
-    TLS --> Gateway
-    JWT --> Gateway
-    Gateway --> Frontend
+    Injection --> Frontend
+    Injection --> BlogService
+    Injection --> CommentService
+    Injection --> UserService
+    Injection --> NotificationService
     
     mTLS --> BlogService
     mTLS --> CommentService
     mTLS --> UserService
     mTLS --> NotificationService
     
-    AuthZ --> BlogService
-    AuthZ --> CommentService
-    AuthZ --> UserService
-    AuthZ --> NotificationService
+    Gateway --> VirtualServices
+    VirtualServices --> DestinationRules
     
     CORS --> Frontend
-    Validation --> BlogService
-    Validation --> CommentService
-    Validation --> UserService
-    Validation --> NotificationService
+    CORS --> BlogService
+    CORS --> CommentService
+    CORS --> UserService
+    CORS --> NotificationService
     
-    NetworkPolicy --> BlogService
-    NetworkPolicy --> CommentService
-    NetworkPolicy --> UserService
-    NetworkPolicy --> NotificationService
+    EnvVars --> Frontend
+    EnvVars --> BlogService
+    EnvVars --> CommentService
+    EnvVars --> UserService
 ```
 
-## 📊 Monitoring Architecture
+## 🗃️ Data Architecture
 
 ```mermaid
 graph TB
-    subgraph "📈 Observability Stack"
-        subgraph "Metrics"
-            Prometheus[📊 Prometheus<br/>Metrics Collection]
-            Grafana[📈 Grafana<br/>Visualization]
-            ServiceMonitor[📋 Service Monitors]
-        end
+    subgraph "💾 In-Memory Data Stores"
+        BlogData[📝 Blog Data<br/>Array of blog objects<br/>- id, title, content, author<br/>- createdAt, likes]
         
-        subgraph "Tracing"
-            Jaeger[🔍 Jaeger<br/>Distributed Tracing]
-            Zipkin[📍 Zipkin<br/>Alternative Tracing]
-        end
+        CommentData[💬 Comment Data<br/>Array of comment objects<br/>- id, blogId, author, content<br/>- createdAt, likes]
         
-        subgraph "Logging"
-            Fluentd[📝 Fluentd<br/>Log Collection]
-            ELK[🔍 ELK Stack<br/>Log Analysis]
-        end
+        UserData[👥 User Data<br/>Array of user objects<br/>- id, name, email, role<br/>- createdAt, profilePicture, bio]
+        
+        NotificationData[🔔 Notification Data<br/>Array of notification objects<br/>- id, type, message, timestamp<br/>- priority, read status]
     end
     
-    subgraph "🏢 Services"
-        IstioProxy[🔀 Istio Proxy]
-        BlogService[📝 Blog Service]
-        CommentService[💬 Comment Service]
-        UserService[👥 User Service]
-        NotificationService[🔔 Notification Service]
+    subgraph "🔗 Service Interactions"
+        BlogService[📝 Blog Service] --> BlogData
+        CommentService[💬 Comment Service] --> CommentData
+        UserService[👥 User Service] --> UserData
+        NotificationService[🔔 Notification Service] --> NotificationData
+        
+        CommentService -.-> |Validate blogId| BlogService
+        BlogService -.-> |Fire-and-forget| NotificationService
+        CommentService -.-> |Fire-and-forget| NotificationService
+        UserService -.-> |Fire-and-forget| NotificationService
     end
     
-    subgraph "📊 Dashboards"
-        SystemDashboard[🖥️ System Dashboard]
-        ServiceDashboard[📋 Service Dashboard]
-        BusinessDashboard[📊 Business Metrics]
+    subgraph "🎯 Sample Data"
+        InitialBlogs[📚 3 Initial Blogs<br/>- Welcome to Microservices<br/>- Service Mesh Architecture<br/>- Kubernetes Best Practices]
+        
+        InitialComments[💭 5 Initial Comments<br/>- Distributed across blogs<br/>- From different authors<br/>- With timestamps]
+        
+        InitialUsers[👤 5 Initial Users<br/>- Different roles (admin, author, reader)<br/>- With profile pictures<br/>- Activity tracking]
+        
+        InitialNotifications[🔔 3 Initial Notifications<br/>- System initialized<br/>- User registered<br/>- Blog created]
     end
     
-    BlogService --> IstioProxy
-    CommentService --> IstioProxy
-    UserService --> IstioProxy
-    NotificationService --> IstioProxy
-    
-    IstioProxy --> Prometheus
-    IstioProxy --> Jaeger
-    IstioProxy --> Fluentd
-    
-    ServiceMonitor --> Prometheus
-    Prometheus --> Grafana
-    
-    Grafana --> SystemDashboard
-    Grafana --> ServiceDashboard
-    Grafana --> BusinessDashboard
-    
-    Jaeger --> ServiceDashboard
-    ELK --> ServiceDashboard
+    BlogData --> InitialBlogs
+    CommentData --> InitialComments
+    UserData --> InitialUsers
+    NotificationData --> InitialNotifications
 ```
 
-## 🔄 CI/CD Pipeline
+## 📊 Monitoring & Observability
 
 ```mermaid
-graph LR
-    subgraph "🔨 Development"
-        Code[💻 Source Code]
-        LocalTest[🧪 Local Testing]
-        Git[📦 Git Repository]
+graph TB
+    subgraph "📈 Istio Observability"
+        EnvoySidecars[🔀 Envoy Sidecars<br/>Auto-injected<br/>Collect metrics]
+        
+        PrometheusEndpoints[📊 Prometheus Metrics<br/>HTTP requests, latency<br/>Service mesh metrics]
+        
+        ServiceMesh[🕸️ Service Mesh<br/>Traffic management<br/>Security policies]
     end
     
-    subgraph "🏗️ Build Pipeline"
-        Build[🔨 Build Images]
-        Test[🧪 Run Tests]
-        Registry[📋 Push to Registry]
+    subgraph "🎯 Monitoring Stack"
+        Prometheus[📊 Prometheus<br/>Port: 9090<br/>Metrics scraping]
+        
+        Grafana[📈 Grafana<br/>Port: 3000<br/>Dashboards & visualization]
+        
+        IstioAddons[🔧 Istio Addons<br/>Pre-configured for service mesh]
     end
     
-    subgraph "🚀 Deployment Pipeline"
-        Deploy[📦 Deploy to K8s]
-        Configure[⚙️ Configure Istio]
-        Monitor[📊 Setup Monitoring]
+    subgraph "📱 Application Monitoring"
+        HealthEndpoints[🏥 Health Endpoints<br/>Service status check]
+        
+        ConsoleLogging[📝 Console Logging<br/>Request/response logs]
+        
+        ServiceStatus[⚡ Service Status<br/>Running/healthy indicators]
     end
     
-    subgraph "✅ Verification"
-        HealthCheck[🏥 Health Checks]
-        SmokeTest[🔥 Smoke Tests]
-        Production[🌐 Production Ready]
-    end
+    EnvoySidecars --> PrometheusEndpoints
+    PrometheusEndpoints --> Prometheus
+    Prometheus --> Grafana
     
-    Code --> LocalTest
-    LocalTest --> Git
-    Git --> Build
-    Build --> Test
-    Test --> Registry
-    Registry --> Deploy
-    Deploy --> Configure
-    Configure --> Monitor
-    Monitor --> HealthCheck
-    HealthCheck --> SmokeTest
-    SmokeTest --> Production
+    IstioAddons --> Prometheus
+    IstioAddons --> Grafana
+    
+    HealthEndpoints --> ServiceStatus
+    ConsoleLogging --> ServiceStatus
 ```
 
 ---
 
-**Các sơ đồ trên minh họa toàn bộ kiến trúc của hệ thống Blog Microservices từ góc độ người dùng đến infrastructure, bao gồm security, monitoring, và deployment pipeline.**
+**Sơ đồ kiến trúc trên phản ánh chính xác hệ thống Blog Microservices thực tế dựa trên các file cấu hình Kubernetes, Istio, và source code của từng service.**
