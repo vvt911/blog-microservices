@@ -20,7 +20,8 @@ graph TB
             end
             
             subgraph "Backend Services"
-                BlogService[Blog Service<br/>Port: 3001<br/>In-Memory Storage]
+                BlogServiceV1[Blog Service V1<br/>Port: 3001<br/>In-Memory Storage<br/>Basic features]
+                BlogServiceV2[Blog Service V2<br/>Port: 3001<br/>In-Memory Storage<br/>Enhanced features]
                 CommentService[Comment Service<br/>Port: 3002<br/>In-Memory Storage]
                 UserService[User Service<br/>Port: 3003<br/>In-Memory Storage]
                 NotificationService[Notification Service<br/>Port: 3004<br/>In-Memory Storage]
@@ -29,16 +30,23 @@ graph TB
         
         subgraph "Istio Networking"
             VS1[blog-virtualservice<br/>/ → frontend:3000]
-            VS2[blog-service-vs<br/>blog-service → :3001]
+            VS2[blog-service-vs<br/>Traffic Routing<br/>v1/v2 distribution]
             VS3[comment-service-vs<br/>comment-service → :3002]
             VS4[user-service-vs<br/>user-service → :3003]
             VS5[notification-service-vs<br/>notification-service → :3004]
             
             DR1[frontend-dr<br/>subset: v1]
-            DR2[blog-service-dr<br/>subset: v1]
+            DR2[blog-service-dr<br/>subset: v1, v2]
             DR3[comment-service-dr<br/>subset: v1]
             DR4[user-service-dr<br/>subset: v1]
             DR5[notification-service-dr<br/>subset: v1]
+        end
+        
+        subgraph "Traffic Routing Scenarios"
+            Canary[Canary Deployment<br/>70% V1, 30% V2]
+            ABTest[A/B Testing<br/>50% V1, 50% V2]
+            HeaderRoute[Header Routing<br/>premium → V2<br/>normal → V1]
+            FaultInjection[Fault Injection<br/>Error simulation]
         end
         
         subgraph "istio-system namespace"
@@ -53,14 +61,19 @@ graph TB
     Gateway --> Frontend
     
     %% Frontend API Proxy Routes
-    Frontend --> |/api/blogs| BlogService
+    Frontend --> |/api/blogs| VS2
     Frontend --> |/api/comments| CommentService
     Frontend --> |/api/users| UserService
     Frontend --> |/api/notifications| NotificationService
     
+    %% Traffic Routing to Blog Services
+    VS2 --> |Weight-based| BlogServiceV1
+    VS2 --> |Weight-based| BlogServiceV2
+    
     %% Inter-Service Communication
-    BlogService --> |POST /notify| NotificationService
-    CommentService --> |GET /blogs/:id| BlogService
+    BlogServiceV1 --> |POST /notify| NotificationService
+    BlogServiceV2 --> |POST /notify| NotificationService
+    CommentService --> |GET /blogs/:id| VS2
     CommentService --> |POST /notify| NotificationService
     UserService --> |POST /notify| NotificationService
     
@@ -72,9 +85,16 @@ graph TB
     VS4 -.-> DR4
     VS5 -.-> DR5
     
+    %% Traffic Scenarios
+    Canary -.-> VS2
+    ABTest -.-> VS2
+    HeaderRoute -.-> VS2
+    FaultInjection -.-> VS2
+    
     %% Monitoring (Envoy Sidecar)
     Frontend -.-> Prometheus
-    BlogService -.-> Prometheus
+    BlogServiceV1 -.-> Prometheus
+    BlogServiceV2 -.-> Prometheus
     CommentService -.-> Prometheus
     UserService -.-> Prometheus
     NotificationService -.-> Prometheus
@@ -84,38 +104,164 @@ graph TB
     %% Styling
     classDef frontend fill:#e1f5fe,stroke:#01579b,stroke-width:2px
     classDef backend fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
+    classDef backendv2 fill:#e8f5e8,stroke:#2e7d32,stroke-width:2px
     classDef monitoring fill:#fff3e0,stroke:#e65100,stroke-width:2px
     classDef external fill:#f1f8e9,stroke:#33691e,stroke-width:2px
     classDef istio fill:#fce4ec,stroke:#880e4f,stroke-width:2px
+    classDef traffic fill:#fff9c4,stroke:#f57f17,stroke-width:2px
     
     class Frontend frontend
-    class BlogService,CommentService,UserService,NotificationService backend
+    class BlogServiceV1,CommentService,UserService,NotificationService backend
+    class BlogServiceV2 backendv2
     class Prometheus,Grafana monitoring
     class User,Minikube,Gateway external
     class VS1,VS2,VS3,VS4,VS5,DR1,DR2,DR3,DR4,DR5 istio
+    class Canary,ABTest,HeaderRoute,FaultInjection traffic
 ```
 
 ## Data Flow Details
 
-### 1. Blog Post Creation Flow
+### 1. Traffic Routing Scenarios
+
+#### Canary Deployment (70% V1, 30% V2)
+```mermaid
+graph TB
+    subgraph "Canary Deployment"
+        User[User Request]
+        VS[blog-service-vs<br/>VirtualService]
+        
+        subgraph "Traffic Distribution"
+            V1Traffic[70% Traffic<br/>Weight: 70]
+            V2Traffic[30% Traffic<br/>Weight: 30]
+        end
+        
+        BlogV1[Blog Service V1<br/>Stable Version<br/>Basic features]
+        BlogV2[Blog Service V2<br/>Canary Version<br/>Enhanced features]
+        
+        User --> VS
+        VS --> V1Traffic
+        VS --> V2Traffic
+        V1Traffic --> BlogV1
+        V2Traffic --> BlogV2
+        
+        BlogV1 --> Response1[Response: Standard format]
+        BlogV2 --> Response2[Response: Enhanced format<br/>+ V2 features indicator]
+    end
+    
+    classDef v1 fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    classDef v2 fill:#e8f5e8,stroke:#2e7d32,stroke-width:2px
+    classDef traffic fill:#fff9c4,stroke:#f57f17,stroke-width:2px
+    
+    class BlogV1,V1Traffic,Response1 v1
+    class BlogV2,V2Traffic,Response2 v2
+    class VS,User traffic
+```
+
+#### A/B Testing (50% V1, 50% V2)
+```mermaid
+graph TB
+    subgraph "A/B Testing"
+        User[User Request]
+        VS[blog-service-vs<br/>VirtualService]
+        
+        subgraph "Equal Traffic Split"
+            V1Traffic[50% Traffic<br/>Weight: 50]
+            V2Traffic[50% Traffic<br/>Weight: 50]
+        end
+        
+        BlogV1[Blog Service V1<br/>Control Group<br/>Standard UI]
+        BlogV2[Blog Service V2<br/>Test Group<br/>Enhanced UI]
+        
+        User --> VS
+        VS --> V1Traffic
+        VS --> V2Traffic
+        V1Traffic --> BlogV1
+        V2Traffic --> BlogV2
+        
+        BlogV1 --> Metrics1[Metrics: Standard KPIs]
+        BlogV2 --> Metrics2[Metrics: Enhanced KPIs<br/>+ Feature usage tracking]
+    end
+    
+    classDef v1 fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    classDef v2 fill:#e8f5e8,stroke:#2e7d32,stroke-width:2px
+    classDef traffic fill:#fff9c4,stroke:#f57f17,stroke-width:2px
+    
+    class BlogV1,V1Traffic,Metrics1 v1
+    class BlogV2,V2Traffic,Metrics2 v2
+    class VS,User traffic
+```
+
+#### Header-based Routing
+```mermaid
+graph TB
+    subgraph "Header-based Routing"
+        PremiumUser[Premium User<br/>Header: user-type=premium]
+        NormalUser[Normal User<br/>No special header]
+        
+        VS[blog-service-vs<br/>VirtualService<br/>Header matching]
+        
+        subgraph "Routing Logic"
+            HeaderMatch[Header Match<br/>user-type: premium]
+            DefaultRoute[Default Route<br/>No header match]
+        end
+        
+        BlogV1[Blog Service V1<br/>Standard Features<br/>Basic UI]
+        BlogV2[Blog Service V2<br/>Premium Features<br/>Enhanced UI]
+        
+        PremiumUser --> VS
+        NormalUser --> VS
+        VS --> HeaderMatch
+        VS --> DefaultRoute
+        HeaderMatch --> BlogV2
+        DefaultRoute --> BlogV1
+        
+        BlogV1 --> StandardFeatures[Standard Features:<br/>- Basic blog CRUD<br/>- Simple UI]
+        BlogV2 --> PremiumFeatures[Premium Features:<br/>- Enhanced blog CRUD<br/>- Advanced UI<br/>- V2 features indicator]
+    end
+    
+    classDef v1 fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    classDef v2 fill:#e8f5e8,stroke:#2e7d32,stroke-width:2px
+    classDef premium fill:#fff3e0,stroke:#f57c00,stroke-width:2px
+    classDef normal fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
+    
+    class BlogV1,DefaultRoute,StandardFeatures,NormalUser normal
+    class BlogV2,HeaderMatch,PremiumFeatures,PremiumUser premium
+    class VS v1
+```
+
+### 2. Blog Post Creation Flow (V1 vs V2)
 
 ```mermaid
 sequenceDiagram
     participant U as User
     participant F as Frontend
-    participant B as Blog Service
+    participant LB as Istio Load Balancer
+    participant B1 as Blog Service V1
+    participant B2 as Blog Service V2
     participant N as Notification Service
     
     U->>F: POST /api/blogs<br/>{title, content, author}
-    F->>B: POST /blogs<br/>{title, content, author}
-    B->>B: Create blog object<br/>Store in memory array
-    B->>N: POST /notify<br/>{type: "blog_created", message, blogId}
-    N->>N: Create notification<br/>Store in memory array
-    N-->>B: 201 Created
-    B-->>F: 201 Created<br/>{id, title, content, author, createdAt, likes}
+    F->>LB: POST /blogs<br/>{title, content, author}
+    
+    alt Traffic to V1 (70%)
+        LB->>B1: Route to V1<br/>Standard processing
+        B1->>B1: Create blog object<br/>Store in memory array
+        B1->>N: POST /notify<br/>{type: "blog_created", message, blogId}
+        N-->>B1: 201 Created
+        B1-->>LB: 201 Created<br/>{id, title, content, author, createdAt, likes}
+    else Traffic to V2 (30%)
+        LB->>B2: Route to V2<br/>Enhanced processing
+        B2->>B2: Create blog object<br/>Store in memory array<br/>+ Enhanced features
+        B2->>N: POST /notify<br/>{type: "blog_created", message, blogId, version: "v2"}
+        N-->>B2: 201 Created
+        B2-->>LB: 201 Created<br/>{id, title, content, author, createdAt, likes, version: "v2", features: "V2 features"}
+    end
+    
+    LB-->>F: Response with version info
     F-->>U: Success response
     
-    Note over B,N: Fire-and-forget notification<br/>Error handling with try-catch
+    Note over B1,B2: V1: Standard features<br/>V2: Enhanced features + version indicator
+    Note over LB: Istio VirtualService<br/>handles traffic distribution
 ```
 
 ### 2. Comment Creation Flow
@@ -195,14 +341,14 @@ graph TB
     
     subgraph "Minikube Production"
         subgraph "Docker Environment"
-            DockerImages[Docker Images<br/>blog-frontend:latest<br/>blog-service:latest<br/>comment-service:latest<br/>user-service:latest<br/>notification-service:latest]
+            DockerImages[Docker Images<br/>blog-frontend:latest<br/>blog-service:latest<br/>blog-service-v2:latest<br/>comment-service:latest<br/>user-service:latest<br/>notification-service:latest]
         end
         
         subgraph "Kubernetes Resources"
             subgraph "blog-microservices namespace"
-                Deployments[Deployments<br/>replicas: 1<br/>imagePullPolicy: Never]
-                Services[Services<br/>ClusterIP<br/>ports: 3000-3004]
-                Pods[Pods<br/>with Envoy sidecars]
+                Deployments[Deployments<br/>blog-service: v1 + v2<br/>replicas: 1 each<br/>imagePullPolicy: Never]
+                Services[Services<br/>ClusterIP<br/>blog-service: selector matches both versions<br/>ports: 3000-3004]
+                Pods[Pods<br/>blog-service-v1-xxx<br/>blog-service-v2-xxx<br/>with Envoy sidecars]
             end
             
             subgraph "istio-system namespace"
@@ -222,6 +368,69 @@ graph TB
     
     IstioControl --> |inject sidecars| Pods
     MonitoringPods --> |scrape metrics| Pods
+```
+
+## Traffic Routing Configuration
+
+```mermaid
+graph TB
+    subgraph "Istio Traffic Management"
+        subgraph "VirtualService Configurations"
+            DefaultVS[Default VirtualService<br/>100% → blog-service v1]
+            CanaryVS[Canary VirtualService<br/>70% → v1, 30% → v2]
+            ABTestVS[A/B Test VirtualService<br/>50% → v1, 50% → v2]
+            HeaderVS[Header-based VirtualService<br/>premium → v2<br/>default → v1]
+            FaultVS[Fault Injection VirtualService<br/>Error simulation]
+        end
+        
+        subgraph "DestinationRule"
+            DR[blog-service-dr<br/>Defines subsets:<br/>- v1: version=v1<br/>- v2: version=v2]
+        end
+        
+        subgraph "Traffic Scenarios"
+            Scenario1[📁 k8s/traffic-scenarios/<br/>canary.yaml]
+            Scenario2[📁 k8s/traffic-scenarios/<br/>ab-test.yaml]
+            Scenario3[📁 k8s/traffic-scenarios/<br/>header-routing.yaml]
+            Scenario4[📁 k8s/traffic-scenarios/<br/>fault-injection.yaml]
+        end
+        
+        subgraph "Blog Service Deployments"
+            BlogV1Deploy[blog-service-v1<br/>labels: version=v1<br/>image: blog-service:latest]
+            BlogV2Deploy[blog-service-v2<br/>labels: version=v2<br/>image: blog-service-v2:latest]
+        end
+        
+        subgraph "Service"
+            BlogSvc[blog-service<br/>selector: app=blog-service<br/>matches both v1 and v2]
+        end
+    end
+    
+    %% Configuration Flow
+    Scenario1 --> CanaryVS
+    Scenario2 --> ABTestVS
+    Scenario3 --> HeaderVS
+    Scenario4 --> FaultVS
+    
+    %% Traffic Flow
+    CanaryVS --> DR
+    ABTestVS --> DR
+    HeaderVS --> DR
+    FaultVS --> DR
+    DefaultVS --> DR
+    
+    DR --> BlogSvc
+    BlogSvc --> BlogV1Deploy
+    BlogSvc --> BlogV2Deploy
+    
+    %% Styling
+    classDef config fill:#e1f5fe,stroke:#01579b,stroke-width:2px
+    classDef v1 fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
+    classDef v2 fill:#e8f5e8,stroke:#2e7d32,stroke-width:2px
+    classDef scenarios fill:#fff3e0,stroke:#e65100,stroke-width:2px
+    
+    class DefaultVS,CanaryVS,ABTestVS,HeaderVS,FaultVS,DR,BlogSvc config
+    class BlogV1Deploy v1
+    class BlogV2Deploy v2
+    class Scenario1,Scenario2,Scenario3,Scenario4 scenarios
 ```
 
 ## Security & Configuration
@@ -249,19 +458,22 @@ graph TB
     
     subgraph "Services"
         Frontend[Frontend]
-        BlogService[Blog Service]
+        BlogServiceV1[Blog Service V1]
+        BlogServiceV2[Blog Service V2]
         CommentService[Comment Service]
         UserService[User Service]
         NotificationService[Notification Service]
     end
     
     Injection --> Frontend
-    Injection --> BlogService
+    Injection --> BlogServiceV1
+    Injection --> BlogServiceV2
     Injection --> CommentService
     Injection --> UserService
     Injection --> NotificationService
     
-    mTLS --> BlogService
+    mTLS --> BlogServiceV1
+    mTLS --> BlogServiceV2
     mTLS --> CommentService
     mTLS --> UserService
     mTLS --> NotificationService
@@ -270,13 +482,15 @@ graph TB
     VirtualServices --> DestinationRules
     
     CORS --> Frontend
-    CORS --> BlogService
+    CORS --> BlogServiceV1
+    CORS --> BlogServiceV2
     CORS --> CommentService
     CORS --> UserService
     CORS --> NotificationService
     
     EnvVars --> Frontend
-    EnvVars --> BlogService
+    EnvVars --> BlogServiceV1
+    EnvVars --> BlogServiceV2
     EnvVars --> CommentService
     EnvVars --> UserService
 ```
@@ -296,13 +510,16 @@ graph TB
     end
     
     subgraph "Service Interactions"
-        BlogService[Blog Service] --> BlogData
+        BlogServiceV1[Blog Service V1] --> BlogData
+        BlogServiceV2[Blog Service V2] --> BlogData
         CommentService[Comment Service] --> CommentData
         UserService[User Service] --> UserData
         NotificationService[Notification Service] --> NotificationData
         
-        CommentService -.-> |Validate blogId| BlogService
-        BlogService -.-> |Fire-and-forget| NotificationService
+        CommentService -.-> |Validate blogId| BlogServiceV1
+        CommentService -.-> |Validate blogId| BlogServiceV2
+        BlogServiceV1 -.-> |Fire-and-forget| NotificationService
+        BlogServiceV2 -.-> |Fire-and-forget| NotificationService
         CommentService -.-> |Fire-and-forget| NotificationService
         UserService -.-> |Fire-and-forget| NotificationService
     end
@@ -323,12 +540,70 @@ graph TB
     NotificationData --> InitialNotifications
 ```
 
+## Service Version Comparison
+
+```mermaid
+graph TB
+    subgraph "Blog Service V1"
+        V1Features[Standard Features:<br/>- Basic CRUD operations<br/>- In-memory storage<br/>- Standard response format<br/>- Basic error handling]
+        
+        V1Response[Response Format:<br/>{<br/>  id, title, content,<br/>  author, createdAt, likes<br/>}]
+        
+        V1Docker[Docker Image:<br/>blog-service:latest<br/>Standard Node.js app]
+    end
+    
+    subgraph "Blog Service V2"
+        V2Features[Enhanced Features:<br/>- Advanced CRUD operations<br/>- In-memory storage<br/>- Enhanced response format<br/>- Advanced error handling<br/>- Version indicators]
+        
+        V2Response[Response Format:<br/>{<br/>  id, title, content,<br/>  author, createdAt, likes,<br/>  version: "v2",<br/>  features: "V2 features"<br/>}]
+        
+        V2Docker[Docker Image:<br/>blog-service-v2:latest<br/>Enhanced Node.js app]
+    end
+    
+    subgraph "Traffic Distribution Strategy"
+        ProductionUse[Production Use Cases:<br/>- Canary: 70% V1, 30% V2<br/>- A/B Test: 50% V1, 50% V2<br/>- Header-based: Premium → V2<br/>- Fault Injection: Error simulation]
+        
+        TestingStrategy[Testing Strategy:<br/>- Gradual rollout<br/>- Feature validation<br/>- Performance comparison<br/>- User experience testing]
+    end
+    
+    subgraph "Monitoring & Metrics"
+        V1Metrics[V1 Metrics:<br/>- Request count<br/>- Response time<br/>- Error rate<br/>- Standard KPIs]
+        
+        V2Metrics[V2 Metrics:<br/>- Request count<br/>- Response time<br/>- Error rate<br/>- Enhanced KPIs<br/>- Feature usage tracking]
+        
+        Comparison[Comparison Dashboard:<br/>- Version performance<br/>- Feature adoption<br/>- Error rates<br/>- User satisfaction]
+    end
+    
+    V1Features --> V1Response
+    V2Features --> V2Response
+    V1Docker --> V1Features
+    V2Docker --> V2Features
+    
+    V1Response --> V1Metrics
+    V2Response --> V2Metrics
+    V1Metrics --> Comparison
+    V2Metrics --> Comparison
+    
+    ProductionUse --> TestingStrategy
+    TestingStrategy --> Comparison
+    
+    classDef v1 fill:#e3f2fd,stroke:#1976d2,stroke-width:2px
+    classDef v2 fill:#e8f5e8,stroke:#2e7d32,stroke-width:2px
+    classDef strategy fill:#fff3e0,stroke:#e65100,stroke-width:2px
+    classDef metrics fill:#fce4ec,stroke:#880e4f,stroke-width:2px
+    
+    class V1Features,V1Response,V1Docker,V1Metrics v1
+    class V2Features,V2Response,V2Docker,V2Metrics v2
+    class ProductionUse,TestingStrategy strategy
+    class Comparison metrics
+```
+
 ## Monitoring & Observability
 
 ```mermaid
 graph TB
     subgraph "Istio Observability"
-        EnvoySidecars[Envoy Sidecars<br/>Auto-injected<br/>Collect metrics]
+        EnvoySidecars[Envoy Sidecars<br/>Auto-injected to all services<br/>Including blog-service v1 & v2<br/>Collect metrics & traces]
         
         PrometheusEndpoints[Prometheus Metrics<br/>HTTP requests, latency<br/>Service mesh metrics]
         
@@ -364,4 +639,4 @@ graph TB
 
 ---
 
-**This architecture diagram accurately reflects the Blog Microservices system based on Kubernetes configurations, Istio setup, and source code of each service.**
+**This updated architecture diagram accurately reflects the Blog Microservices system with blog-service-v2 implementation, including traffic routing scenarios, version comparison, and enhanced monitoring capabilities based on Kubernetes configurations, Istio setup, and source code of each service.**
