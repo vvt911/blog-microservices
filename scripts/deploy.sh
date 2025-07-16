@@ -200,20 +200,46 @@ for service_info in "${monitoring_services[@]}"; do
 done
 
 print_status "🖥️ Ứng dụng:"
-for service_info in "${app_services[@]}"; do
-    IFS=':' read -r name port namespace <<< "$service_info"
-    available_port=$(find_available_port 8080)
-    
-    if [ "$available_port" != "0" ]; then
-        kubectl port-forward svc/$name $available_port:$port -n $namespace >/dev/null 2>&1 &
-        pid=$!
-        echo "   ✅ Frontend: http://localhost:$available_port - PID: $pid"
-        FRONTEND_PORT=$available_port
+# Truy cập qua cả hai cách: direct và qua Istio Gateway
+frontend_port=$(find_available_port 8080)
+gateway_port=$(find_available_port 8081)
+
+# Port-forward trực tiếp đến frontend (backup)
+if [ "$frontend_port" != "0" ]; then
+    print_status "Khởi động port-forward trực tiếp đến frontend..."
+    kubectl port-forward svc/frontend $frontend_port:3000 -n blog-microservices >/dev/null 2>&1 &
+    frontend_pid=$!
+    sleep 2
+    if lsof -Pi :$frontend_port -sTCP:LISTEN -t >/dev/null 2>&1; then
+        echo "   ✅ Frontend Direct: http://localhost:$frontend_port - PID: $frontend_pid"
     else
-        echo "   ❌ Frontend: Không có port khả dụng"
-        FRONTEND_PORT="0"
+        echo "   ❌ Frontend Direct: Không thể khởi động"
+        kill $frontend_pid 2>/dev/null || true
+        frontend_port="0"
     fi
-done
+else
+    echo "   ❌ Frontend Direct: Không có port khả dụng"
+    frontend_port="0"
+fi
+
+# Port-forward qua Istio Gateway 
+if [ "$gateway_port" != "0" ]; then
+    print_status "Khởi động port-forward cho Istio Gateway..."
+    kubectl port-forward svc/istio-ingressgateway $gateway_port:80 -n istio-system >/dev/null 2>&1 &
+    gateway_pid=$!
+    sleep 3
+    if lsof -Pi :$gateway_port -sTCP:LISTEN -t >/dev/null 2>&1; then
+        echo "   ✅ Istio Gateway: http://localhost:$gateway_port - PID: $gateway_pid"
+        FRONTEND_PORT=$gateway_port
+    else
+        echo "   ❌ Istio Gateway: Không thể khởi động"
+        kill $gateway_pid 2>/dev/null || true
+        FRONTEND_PORT=$frontend_port
+    fi
+else
+    echo "   ❌ Istio Gateway: Không có port khả dụng"
+    FRONTEND_PORT=$frontend_port
+fi
 echo ""
 # ==============================================
 # 🎉 TRIỂN KHAI HOÀN THÀNH
@@ -223,8 +249,11 @@ print_success "🚀 Blog Microservices với Istio đã triển khai thành côn
 echo ""
 
 print_status "🎯 Actions:"
-if [ "$FRONTEND_PORT" != "0" ]; then
-    echo "   📱 Truy cập App: http://localhost:$FRONTEND_PORT"
+if [ "$frontend_port" != "0" ]; then
+    echo "   📱 Truy cập trực tiếp Frontend: http://localhost:$frontend_port"
+fi
+if [ "$gateway_port" != "0" ]; then
+    echo "   🌐 Truy cập qua Istio Gateway: http://localhost:$gateway_port"
 fi
 echo "   🛑 Dừng tất cả: pkill -f 'kubectl port-forward'"
 echo "   🔄 Khởi động lại: ./deploy.sh"
