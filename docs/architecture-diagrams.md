@@ -53,13 +53,16 @@ graph TB
     Gateway --> Frontend
     
     %% Frontend API Proxy Routes
-    Frontend --> |/api/blogs| VS2
+    Frontend --> |/api/blogs| BlogService
     Frontend --> |/api/comments| CommentService
     Frontend --> |/api/users| UserService
     Frontend --> |/api/notifications| NotificationService
     
     %% Service Routes
     VS2 --> BlogService
+    VS3 --> CommentService
+    VS4 --> UserService
+    VS5 --> NotificationService
     
     %% Inter-Service Communication
     BlogService --> |POST /notify| NotificationService
