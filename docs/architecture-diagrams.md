@@ -20,11 +20,17 @@ graph TB
             end
             
             subgraph "Backend Services"
-                BlogServiceV1[Blog Service V1<br/>Port: 3001<br/>In-Memory Storage<br/>Basic features]
-                BlogServiceV2[Blog Service V2<br/>Port: 3001<br/>In-Memory Storage<br/>Enhanced features]
+                BlogService[Blog Service<br/>Port: 3001<br/>In-Memory Storage]
+                BlogProxy[Envoy Sidecar]
+                
                 CommentService[Comment Service<br/>Port: 3002<br/>In-Memory Storage]
+                CommentProxy[Envoy Sidecar]
+                
                 UserService[User Service<br/>Port: 3003<br/>In-Memory Storage]
+                UserProxy[Envoy Sidecar]
+                
                 NotificationService[Notification Service<br/>Port: 3004<br/>In-Memory Storage]
+                NotificationProxy[Envoy Sidecar]
             end
         end
         
@@ -59,13 +65,15 @@ graph TB
     Frontend --> |/api/users| UserService
     Frontend --> |/api/notifications| NotificationService
     
-    %% Traffic Routing to Blog Services
-    VS2 --> |Weight-based| BlogServiceV1
-    VS2 --> |Weight-based| BlogServiceV2
+    %% Service to Proxy Connections
+    BlogService --> BlogProxy
+    CommentService --> CommentProxy
+    UserService --> UserProxy
+    NotificationService --> NotificationProxy
     
-    %% Inter-Service Communication
-    BlogServiceV1 --> |POST /notify| NotificationService
-    BlogServiceV2 --> |POST /notify| NotificationService
+    %% Inter-Service Communication via Proxies
+    BlogProxy --> |POST /notify| NotificationProxy
+    CommentProxy --> |GET /blogs/:id| BlogProxy
     CommentService --> |GET /blogs/:id| VS2
     CommentService --> |POST /notify| NotificationService
     UserService --> |POST /notify| NotificationService
@@ -79,12 +87,10 @@ graph TB
     VS5 -.-> DR5
     
     %% Monitoring (Envoy Sidecar)
-    Frontend -.-> Prometheus
-    BlogServiceV1 -.-> Prometheus
-    BlogServiceV2 -.-> Prometheus
-    CommentService -.-> Prometheus
-    UserService -.-> Prometheus
-    NotificationService -.-> Prometheus
+    BlogProxy -.-> Prometheus
+    CommentProxy -.-> Prometheus
+    UserProxy -.-> Prometheus
+    NotificationProxy -.-> Prometheus
     
     Prometheus --> Grafana
     
@@ -98,8 +104,8 @@ graph TB
     classDef traffic fill:#fff9c4,stroke:#f57f17,stroke-width:2px
     
     class Frontend frontend
-    class BlogServiceV1,CommentService,UserService,NotificationService backend
-    class BlogServiceV2 backendv2
+    class BlogService,CommentService,UserService,NotificationService backend
+    class BlogProxy,CommentProxy,UserProxy,NotificationProxy istio
     class Prometheus,Grafana monitoring
     class User,Minikube,Gateway external
     class VS1,VS2,VS3,VS4,VS5,DR1,DR2,DR3,DR4,DR5 istio
