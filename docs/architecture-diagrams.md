@@ -387,7 +387,7 @@ graph TB
 
 ```mermaid
 graph TB
-    subgraph "blog-microservices namespace"
+    subgraph "blog-microservices<br/>namespace"
         subgraph "Test Pods"
             PodNoSidecar["Test Pod<br/>Without Sidecar<br/>(test-mtls)<br/>sidecar.istio.io/inject: false"]
             PodWithSidecar["Test Pod<br/>With Sidecar<br/>(test-mtls-with-sidecar)"]
