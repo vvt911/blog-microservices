@@ -16,14 +16,32 @@ graph TB
 
         subgraph "blog-microservices<br/>namespace"
             subgraph "Frontend Layer"
-                Frontend[Frontend<br/>Port: 3000<br/>API Proxy + Static Files]
+                subgraph "Frontend Pod"
+                    Frontend[Frontend<br/>Port: 3000<br/>API Proxy + Static Files]
+                    FrontendSidecar[Sidecar Proxy]
+                end
             end
 
             subgraph "Backend Services"
-                BlogService[Blog Service<br/>Port: 3001<br/>In-Memory Storage]
-                CommentService[Comment Service<br/>Port: 3002<br/>In-Memory Storage]
-                UserService[User Service<br/>Port: 3003<br/>In-Memory Storage]
-                NotificationService[Notification Service<br/>Port: 3004<br/>In-Memory Storage]
+                subgraph "Blog Pod"
+                    BlogService[Blog Service<br/>Port: 3001<br/>In-Memory Storage]
+                    BlogSidecar[Sidecar Proxy]
+                end
+
+                subgraph "Comment Pod"
+                    CommentService[Comment Service<br/>Port: 3002<br/>In-Memory Storage]
+                    CommentSidecar[Sidecar Proxy]
+                end
+
+                subgraph "User Pod"
+                    UserService[User Service<br/>Port: 3003<br/>In-Memory Storage]
+                    UserSidecar[Sidecar Proxy]
+                end
+
+                subgraph "Notification Pod"
+                    NotificationService[Notification Service<br/>Port: 3004<br/>In-Memory Storage]
+                    NotificationSidecar[Sidecar Proxy]
+                end
             end
         end
 
@@ -35,7 +53,7 @@ graph TB
             VS5[notification-service-vs<br/>notification-service → :3004]
             
             DR1[frontend-dr<br/>subset: v1]
-            DR2[blog-service-dr]
+            DR2[blog-service-dr<br/>subset: v1]
             DR3[comment-service-dr<br/>subset: v1]
             DR4[user-service-dr<br/>subset: v1]
             DR5[notification-service-dr<br/>subset: v1]
@@ -47,24 +65,28 @@ graph TB
         end
     end
 
-
-
     %% User Flow
     UserBrowser --> Minikube
     Minikube --> Gateway
     Gateway --> Frontend
 
     %% Frontend API Proxy Routes
-    Frontend --> |/api/blogs| BlogService
-    Frontend --> |/api/comments| CommentService
-    Frontend --> |/api/users| UserService
-    Frontend --> |/api/notifications| NotificationService
+    Frontend --> FrontendSidecar
+    FrontendSidecar --> |/api/blogs| BlogSidecar
+    FrontendSidecar --> |/api/comments| CommentSidecar
+    FrontendSidecar --> |/api/users| UserSidecar
+    FrontendSidecar --> |/api/notifications| NotificationSidecar
+    
+    BlogSidecar --> BlogService
+    CommentSidecar --> CommentService
+    UserSidecar --> UserService
+    NotificationSidecar --> NotificationService
 
     %% Inter-Service Communication
-    BlogService --> |POST /notify| NotificationService
-    CommentService --> |GET /blogs/:id| BlogService
-    CommentService --> |POST /notify| NotificationService
-    UserService --> |POST /notify| NotificationService
+    BlogSidecar --> |POST /notify| NotificationSidecar
+    CommentSidecar --> |GET /blogs/:id| BlogSidecar
+    CommentSidecar --> |POST /notify| NotificationSidecar
+    UserSidecar --> |POST /notify| NotificationSidecar
 
     %% Istio Configuration
     Gateway -.-> VS1
@@ -88,12 +110,16 @@ graph TB
     classDef backend fill:#f3e5f5,stroke:#6a1b9a
     classDef istio fill:#fff3e0,stroke:#ef6c00
     classDef monitor fill:#ede7f6,stroke:#4527a0
+    classDef sidecar fill:#fbe9e7,stroke:#bf360c,font-style:italic
 
     class UserBrowser,Minikube external
     class Frontend frontend
     class BlogService,CommentService,UserService,NotificationService backend
     class VS1,VS2,VS3,VS4,VS5,DR1,DR2,DR3,DR4,DR5 istio
-    class Prometheus,Grafana monitoring
+    class Prometheus,Grafana monitor
+    class FrontendSidecar,BlogSidecar,CommentSidecar,UserSidecar,NotificationSidecar sidecar
+
+
 ```
 
 ## Traffic Management Architecture
