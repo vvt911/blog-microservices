@@ -5,20 +5,20 @@
 ```mermaid
 graph TB
     subgraph "External Access"
-        User[User Browser]
+        UserBrowser[User Browser]
         Minikube[Minikube Cluster]
     end
-    
+
     subgraph "Istio Service Mesh"
         subgraph "Istio Gateway"
             Gateway[blog-gateway<br/>Port: 80<br/>Host: *]
         end
-        
+
         subgraph "blog-microservices<br/>namespace"
             subgraph "Frontend Layer"
                 Frontend[Frontend<br/>Port: 3000<br/>API Proxy + Static Files]
             end
-            
+
             subgraph "Backend Services"
                 BlogService[Blog Service<br/>Port: 3001<br/>In-Memory Storage]
                 CommentService[Comment Service<br/>Port: 3002<br/>In-Memory Storage]
@@ -26,7 +26,7 @@ graph TB
                 NotificationService[Notification Service<br/>Port: 3004<br/>In-Memory Storage]
             end
         end
-        
+
         subgraph "Istio Networking"
             VS1[blog-virtualservice<br/>/ → frontend:3000]
             VS2[blog-service-vs<br/>blog-service → :3001]
@@ -35,41 +35,37 @@ graph TB
             VS5[notification-service-vs<br/>notification-service → :3004]
             
             DR1[frontend-dr<br/>subset: v1]
-            DR2[blog-service-dr<br/>subset: v1]
+            DR2[blog-service-dr]
             DR3[comment-service-dr<br/>subset: v1]
             DR4[user-service-dr<br/>subset: v1]
             DR5[notification-service-dr<br/>subset: v1]
         end
-        
+
         subgraph "istio-system namespace"
             Prometheus[Prometheus<br/>Port: 9090<br/>Metrics Collection]
             Grafana[Grafana<br/>Port: 3000<br/>Visualization]
         end
     end
-    
+
+
+
     %% User Flow
-    User --> Minikube
+    UserBrowser --> Minikube
     Minikube --> Gateway
     Gateway --> Frontend
-    
+
     %% Frontend API Proxy Routes
     Frontend --> |/api/blogs| BlogService
     Frontend --> |/api/comments| CommentService
     Frontend --> |/api/users| UserService
     Frontend --> |/api/notifications| NotificationService
-    
-    %% Service Routes
-    VS2 --> BlogService
-    VS3 --> CommentService
-    VS4 --> UserService
-    VS5 --> NotificationService
-    
+
     %% Inter-Service Communication
     BlogService --> |POST /notify| NotificationService
-    CommentService --> |GET /blogs/:id| VS2
+    CommentService --> |GET /blogs/:id| BlogService
     CommentService --> |POST /notify| NotificationService
     UserService --> |POST /notify| NotificationService
-    
+
     %% Istio Configuration
     Gateway -.-> VS1
     VS1 -.-> DR1
@@ -77,31 +73,27 @@ graph TB
     VS3 -.-> DR3
     VS4 -.-> DR4
     VS5 -.-> DR5
-    
-    %% Monitoring (Envoy Sidecar)
+
+    %% Monitoring
     Frontend -.-> Prometheus
     BlogService -.-> Prometheus
     CommentService -.-> Prometheus
     UserService -.-> Prometheus
     NotificationService -.-> Prometheus
-    
     Prometheus --> Grafana
-    
+
     %% Styling
-    classDef frontend fill:#e1f5fe,stroke:#01579b,stroke-width:2px
-    classDef backend fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
-    classDef backendv2 fill:#e8f5e8,stroke:#2e7d32,stroke-width:2px
-    classDef monitoring fill:#fff3e0,stroke:#e65100,stroke-width:2px
-    classDef external fill:#f1f8e9,stroke:#33691e,stroke-width:2px
-    classDef istio fill:#fce4ec,stroke:#880e4f,stroke-width:2px
-    classDef traffic fill:#fff9c4,stroke:#f57f17,stroke-width:2px
-    
+    classDef external fill:#e8f5e9,stroke:#1b5e20
+    classDef frontend fill:#e3f2fd,stroke:#0d47a1
+    classDef backend fill:#f3e5f5,stroke:#6a1b9a
+    classDef istio fill:#fff3e0,stroke:#ef6c00
+    classDef monitor fill:#ede7f6,stroke:#4527a0
+
+    class UserBrowser,Minikube external
     class Frontend frontend
     class BlogService,CommentService,UserService,NotificationService backend
-    class Prometheus,Grafana monitoring
-    class User,Minikube,Gateway external
     class VS1,VS2,VS3,VS4,VS5,DR1,DR2,DR3,DR4,DR5 istio
-    class Canary,ABTest traffic
+    class Prometheus,Grafana monitoring
 ```
 
 ## Traffic Management Architecture
