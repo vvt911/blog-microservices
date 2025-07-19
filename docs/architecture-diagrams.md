@@ -386,39 +386,39 @@ graph TB
 ## mTLS Testing Architecture
 
 ```mermaid
-graph TB
-    subgraph "blog-microservices namespace"
-        subgraph "Test Pods"
-            PodNoSidecar[Test Pod<br/>Without Sidecar<br/>(test-mtls)<br/>sidecar.istio.io/inject: false]
-            PodWithSidecar[Test Pod<br/>With Sidecar<br/>(test-mtls-with-sidecar)]
+flowchart TB
+    subgraph namespace["blog-microservices namespace"]
+        subgraph test["Test Pods"]
+            PodNoSidecar["Test Pod\nWithout Sidecar\n(test-mtls)\nsidecar.istio.io/inject: false"]
+            PodWithSidecar["Test Pod\nWith Sidecar\n(test-mtls-with-sidecar)"]
         end
 
-        subgraph "Target Service"
-            BlogService[Blog Service<br/>Port: 3001]
-            BlogSidecar[Istio Sidecar Proxy]
+        subgraph target["Target Service"]
+            BlogService["Blog Service\nPort: 3001"]
+            BlogSidecar["Istio Sidecar Proxy"]
         end
 
-        subgraph "mTLS Modes"
-            PERMISSIVE[PERMISSIVE Mode<br/>Accepts both plain & mTLS]
-            STRICT[STRICT Mode<br/>Only accepts mTLS]
+        subgraph modes["mTLS Modes"]
+            PERMISSIVE["PERMISSIVE Mode\nAccepts both plain & mTLS"]
+            STRICT["STRICT Mode\nOnly accepts mTLS"]
         end
     end
 
     %% Connections in PERMISSIVE mode
-    PodNoSidecar -->|HTTP Request<br/>✅ Success in PERMISSIVE| BlogService
-    PodWithSidecar -->|mTLS Request<br/>✅ Success in PERMISSIVE| BlogSidecar
+    PodNoSidecar -->|"HTTP Request\n✅ Success in PERMISSIVE"| BlogService
+    PodWithSidecar -->|"mTLS Request\n✅ Success in PERMISSIVE"| BlogSidecar
 
     %% Connections in STRICT mode
-    PodNoSidecar -.->|HTTP Request<br/>❌ Fails in STRICT| BlogService
-    PodWithSidecar -->|mTLS Request<br/>✅ Success in STRICT| BlogSidecar
+    PodNoSidecar -.->|"HTTP Request\n❌ Fails in STRICT"| BlogService
+    PodWithSidecar -->|"mTLS Request\n✅ Success in STRICT"| BlogSidecar
 
     %% Service connections
     BlogSidecar --> BlogService
 
     %% Mode switches
-    PERMISSIVE -.->|Switch Mode| STRICT
+    PERMISSIVE -.->|"Switch Mode"| STRICT
 
-    %% Styling for better visualization
+    %% Styling
     classDef sidecar fill:#326CE5,stroke:#fff,stroke-width:2px,color:#fff
     classDef service fill:#389826,stroke:#fff,stroke-width:2px,color:#fff
     classDef pod fill:#F9B13C,stroke:#fff,stroke-width:2px,color:#333
