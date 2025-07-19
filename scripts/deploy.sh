@@ -92,14 +92,16 @@ print_success "Istio đã sẵn sàng"
 echo ""
 
 # ==============================================
-# 📊 BƯỚC 4: THIẾT LẬP MONITORING (PROMETHEUS + GRAFANA)
+# 📊 BƯỚC 4: THIẾT LẬP MONITORING (PROMETHEUS + GRAFANA + KIALI)
 # ==============================================
 
-print_status "Bước 4: Thiết lập Monitoring (Prometheus + Grafana)..."
+print_status "Bước 4: Thiết lập Monitoring (Prometheus + Grafana + Kiali)..."
 print_status "Cài đặt Prometheus từ Istio addon..."
 kubectl apply -f https://raw.githubusercontent.com/istio/istio/release-1.20/samples/addons/prometheus.yaml >/dev/null 2>&1 || true
 print_status "Cài đặt Grafana từ Istio addon..."
 kubectl apply -f https://raw.githubusercontent.com/istio/istio/release-1.20/samples/addons/grafana.yaml >/dev/null 2>&1 || true
+print_status "Cài đặt Kiali từ Istio addon..."
+kubectl apply -f istio-1.26.2/samples/addons/kiali.yaml >/dev/null 2>&1 || true
 print_success "Monitoring stack đã sẵn sàng"
 echo ""
 
@@ -176,7 +178,7 @@ pkill -f "kubectl port-forward" 2>/dev/null || true
 sleep 2
 
 # Khởi động monitoring dashboards
-monitoring_services=("grafana:3000:istio-system" "prometheus:9090:istio-system")
+monitoring_services=("grafana:3000:istio-system" "prometheus:9090:istio-system" "kiali:20001:istio-system")
 app_services=("frontend:3000:blog-microservices")
 
 print_status "📊 Monitoring Dashboards:"

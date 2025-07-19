@@ -98,6 +98,56 @@ graph TB
     Prometheus --> Grafana
     
     %% Styling
+
+## mTLS Testing Scenarios
+
+```mermaid
+graph TB
+    subgraph "PERMISSIVE Mode"
+        direction TB
+        subgraph "Test Pod Without Sidecar"
+            PNoSidecar[test-mtls<br/>Without Istio Sidecar]
+        end
+        
+        subgraph "Test Pod With Sidecar"
+            PWithSidecar[test-mtls-with-sidecar<br/>With Istio Sidecar]
+        end
+        
+        subgraph "Target Service"
+            PBlogService[blog-service<br/>With Istio Sidecar]
+        end
+        
+        PNoSidecar -->|Plain HTTP ✓| PBlogService
+        PWithSidecar -->|mTLS ✓| PBlogService
+    end
+
+    subgraph "STRICT Mode"
+        direction TB
+        subgraph "Test Pod Without Sidecar "
+            SNoSidecar[test-mtls<br/>Without Istio Sidecar]
+        end
+        
+        subgraph "Test Pod With Sidecar "
+            SWithSidecar[test-mtls-with-sidecar<br/>With Istio Sidecar]
+        end
+        
+        subgraph "Target Service "
+            SBlogService[blog-service<br/>With Istio Sidecar]
+        end
+        
+        SNoSidecar -->|Plain HTTP ✗<br/>Connection Refused| SBlogService
+        SWithSidecar -->|mTLS ✓| SBlogService
+    end
+
+    %% Notes
+    classDef note fill:#f9f,stroke:#333,stroke-width:2px
+    
+    Note1[PERMISSIVE Mode:<br/>Accepts both plain HTTP and mTLS]:::note
+    Note2[STRICT Mode:<br/>Only accepts mTLS connections]:::note
+    
+    PERMISSIVE Mode -.-> Note1
+    STRICT Mode -.-> Note2
+```
     classDef frontend fill:#e1f5fe,stroke:#01579b,stroke-width:2px
     classDef backend fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
     classDef backendv2 fill:#e8f5e8,stroke:#2e7d32,stroke-width:2px
