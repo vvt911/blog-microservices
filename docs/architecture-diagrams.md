@@ -97,6 +97,53 @@ graph TB
     
     Prometheus --> Grafana
     
+## mTLS Testing Architecture
+
+```mermaid
+graph TB
+    subgraph "blog-microservices namespace"
+        subgraph "Test Pods"
+            PodNoSidecar[Test Pod<br/>Without Sidecar<br/>(test-mtls)<br/>sidecar.istio.io/inject: false]
+            PodWithSidecar[Test Pod<br/>With Sidecar<br/>(test-mtls-with-sidecar)]
+        end
+
+        subgraph "Target Service"
+            BlogService[Blog Service<br/>Port: 3001]
+            BlogSidecar[Istio Sidecar Proxy]
+        end
+
+        subgraph "mTLS Modes"
+            PERMISSIVE[PERMISSIVE Mode<br/>Accepts both plain & mTLS]
+            STRICT[STRICT Mode<br/>Only accepts mTLS]
+        end
+    end
+
+    %% Connections in PERMISSIVE mode
+    PodNoSidecar -->|HTTP Request<br/>✅ Success in PERMISSIVE| BlogService
+    PodWithSidecar -->|mTLS Request<br/>✅ Success in PERMISSIVE| BlogSidecar
+
+    %% Connections in STRICT mode
+    PodNoSidecar -.->|HTTP Request<br/>❌ Fails in STRICT| BlogService
+    PodWithSidecar -->|mTLS Request<br/>✅ Success in STRICT| BlogSidecar
+
+    %% Service connections
+    BlogSidecar --> BlogService
+
+    %% Mode switches
+    PERMISSIVE -.->|Switch Mode| STRICT
+
+    %% Styling for better visualization
+    classDef sidecar fill:#326CE5,stroke:#fff,stroke-width:2px,color:#fff
+    classDef service fill:#389826,stroke:#fff,stroke-width:2px,color:#fff
+    classDef pod fill:#F9B13C,stroke:#fff,stroke-width:2px,color:#333
+    classDef mode fill:#800080,stroke:#fff,stroke-width:2px,color:#fff
+    
+    class BlogSidecar sidecar
+    class BlogService service
+    class PodNoSidecar,PodWithSidecar pod
+    class PERMISSIVE,STRICT mode
+```
+
     %% Styling
     classDef frontend fill:#e1f5fe,stroke:#01579b,stroke-width:2px
     classDef backend fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
