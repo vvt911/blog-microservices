@@ -42,11 +42,6 @@ graph TB
             DR5[notification-service-dr<br/>subset: v1]
         end
         
-        subgraph "Traffic Routing Scenarios"
-            Canary[Canary Deployment<br/>70% V1, 30% V2]
-            ABTest[A/B Testing<br/>50% V1, 50% V2]
-        end
-        
         subgraph "istio-system namespace"
             Prometheus[Prometheus<br/>Port: 9090<br/>Metrics Collection]
             Grafana[Grafana<br/>Port: 3000<br/>Visualization]
@@ -83,10 +78,6 @@ graph TB
     VS4 -.-> DR4
     VS5 -.-> DR5
     
-    %% Traffic Scenarios
-    Canary -.-> VS2
-    ABTest -.-> VS2
-    
     %% Monitoring (Envoy Sidecar)
     Frontend -.-> Prometheus
     BlogServiceV1 -.-> Prometheus
@@ -113,6 +104,69 @@ graph TB
     class User,Minikube,Gateway external
     class VS1,VS2,VS3,VS4,VS5,DR1,DR2,DR3,DR4,DR5 istio
     class Canary,ABTest traffic
+```
+
+## Traffic Management Architecture
+
+```mermaid
+graph TB
+    subgraph "Istio Traffic Management"
+        subgraph "Traffic Control"
+            VS[blog-service-vs<br/>VirtualService]
+            DR[blog-service-dr<br/>DestinationRule]
+        end
+        
+        subgraph "Traffic Split"
+            V1Route[V1 Route<br/>Version: v1]
+            V2Route[V2 Route<br/>Version: v2]
+        end
+        
+        subgraph "Traffic Scenarios"
+            Canary[Canary Deployment<br/>70% V1, 30% V2]
+            ABTest[A/B Testing<br/>50% V1, 50% V2]
+            BlueGreen[Blue/Green<br/>Quick version switch]
+        end
+        
+        subgraph "Services"
+            BlogV1[Blog Service V1<br/>Stable Version]
+            BlogV2[Blog Service V2<br/>New Version]
+        end
+        
+        subgraph "Monitoring"
+            Metrics[Traffic Metrics<br/>Success rate<br/>Latency<br/>Error rate]
+            Monitor[Version Monitor<br/>Health checks<br/>Performance comparison]
+        end
+    end
+    
+    %% Traffic Flow
+    VS --> DR
+    DR --> V1Route
+    DR --> V2Route
+    V1Route --> BlogV1
+    V2Route --> BlogV2
+    
+    %% Scenario Configuration
+    Canary -.-> VS
+    ABTest -.-> VS
+    BlueGreen -.-> VS
+    
+    %% Monitoring
+    BlogV1 --> Metrics
+    BlogV2 --> Metrics
+    Metrics --> Monitor
+    
+    %% Styling
+    classDef control fill:#e1f5fe,stroke:#01579b,stroke-width:2px
+    classDef route fill:#f3e5f5,stroke:#4a148c,stroke-width:2px
+    classDef service fill:#e8f5e8,stroke:#2e7d32,stroke-width:2px
+    classDef scenario fill:#fff3e0,stroke:#e65100,stroke-width:2px
+    classDef monitor fill:#fce4ec,stroke:#880e4f,stroke-width:2px
+    
+    class VS,DR control
+    class V1Route,V2Route route
+    class BlogV1,BlogV2 service
+    class Canary,ABTest,BlueGreen scenario
+    class Metrics,Monitor monitor
 ```
 
 ## Data Flow Details
