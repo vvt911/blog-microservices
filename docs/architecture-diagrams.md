@@ -29,13 +29,13 @@ graph TB
         
         subgraph "Istio Networking"
             VS1[blog-virtualservice<br/>/ → frontend:3000]
-            VS2[blog-service-vs<br/>Traffic Routing<br/>v1/v2 distribution]
+            VS2[blog-service-vs<br/>blog-service → :3001]
             VS3[comment-service-vs<br/>comment-service → :3002]
             VS4[user-service-vs<br/>user-service → :3003]
             VS5[notification-service-vs<br/>notification-service → :3004]
             
             DR1[frontend-dr<br/>subset: v1]
-            DR2[blog-service-dr<br/>subset: v1, v2]
+            DR2[blog-service-dr<br/>subset: v1]
             DR3[comment-service-dr<br/>subset: v1]
             DR4[user-service-dr<br/>subset: v1]
             DR5[notification-service-dr<br/>subset: v1]
