@@ -130,10 +130,10 @@ print_success "Kubernetes resources đã được triển khai"
 echo ""
 
 # ==============================================
-# ⚙️ BƯỚC 6: CẤU HÌNH MONITORING
+# ⚙️ BƯỚC 6: CẤU HÌNH mTLS
 # ==============================================
 
-print_status "Bước 6: Cấu hình monitoring..."
+print_status "Bước 6: Cấu hình mTLS..."
 
 # Istio sẽ tự động inject sidecar và thu thập metrics
 print_status "Istio sẽ tự động thu thập metrics từ service mesh"
@@ -148,10 +148,10 @@ metadata:
   namespace: blog-microservices
 spec:
   mtls:
-    mode: PERMISSIVE
+    mode: PERMISSIVE // Cho phép cả traffic mTLS và không mTLS
 EOF
 
-print_success "Monitoring đã được cấu hình"
+print_success "mTLS đã được cấu hình"
 echo ""
 
 # ==============================================
