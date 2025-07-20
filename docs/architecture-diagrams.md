@@ -460,7 +460,10 @@ graph TB
     subgraph "blog-microservices<br/>namespace"
         subgraph "Test Pods"
             PodNoSidecar["Test Pod<br/>Without Sidecar<br/>(test-mtls)<br/>sidecar.istio.io/inject: false"]
-            PodWithSidecar["Test Pod<br/>With Sidecar<br/>(test-mtls-with-sidecar)"]
+            subgraph "Test Pod with Sidecar"
+                PodWithSidecar["Test Pod<br/>(test-mtls-with-sidecar)"]
+                TestSidecar["Istio Sidecar Proxy"]
+            end
         end
 
         subgraph "Target Service"
@@ -476,11 +479,13 @@ graph TB
 
     %% Connections in PERMISSIVE mode
     PodNoSidecar -->|"HTTP Request<br/>✅ Success in PERMISSIVE"| BlogService
-    PodWithSidecar -->|"mTLS Request<br/>✅ Success in PERMISSIVE"| BlogSidecar
+    PodWithSidecar --> TestSidecar
+    TestSidecar -->|"mTLS Request<br/>✅ Success in PERMISSIVE"| BlogSidecar
 
     %% Connections in STRICT mode
     PodNoSidecar -.->|"HTTP Request<br/>❌ Fails in STRICT"| BlogService
-    PodWithSidecar -->|"mTLS Request<br/>✅ Success in STRICT"| BlogSidecar
+    PodWithSidecar --> TestSidecar
+    TestSidecar -->|"mTLS Request<br/>✅ Success in STRICT"| BlogSidecar
 
     %% Service connections
     BlogSidecar --> BlogService
